@@ -89,6 +89,9 @@ class CodeGraph:
                                         {"resolved": False, "placeholder": True})
 
     # -- access -----------------------------------------------------
+    def get(self, node_id: str) -> Node | None:
+        return self._nodes.get(node_id)
+
     @property
     def nodes(self) -> list[Node]:
         return list(self._nodes.values())

@@ -162,6 +162,12 @@ def _print_scan_summary(ctx, result) -> None:
         if c.get("call_edges"):
             print(f"  calls:         {c['call_edges']} edges, "
                   f"resolution {c['call_resolution_rate']} {c['calls_by_confidence']}")
+        spring = getattr(java, "spring", None)
+        if spring is not None and spring.is_spring():
+            sc = spring.counts()
+            print(f"  spring:        {sc['components']} components "
+                  f"{sc['components_by_stereotype']}, {sc['endpoints']} endpoints, "
+                  f"{sc['beans']} beans, {sc['injections']} injections")
         for kind, n in c["nodes_by_kind"].items():
             print(f"      {kind:16} {n}")
 

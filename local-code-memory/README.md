@@ -14,7 +14,8 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 | 1 | Repository inventory scanner (file classification, hashes, build/framework detection, `project_inventory.json`, `00_project_overview.md`) | ✅ done |
 | 2 | Java semantic scan (tree-sitter): packages, types, methods, constructors, fields, params, annotations, imports, inheritance — with source locations — into a normalized code graph (`graph/nodes.json`, `graph/edges.json`) | ✅ done |
 | 3 | Syntactic call graph + reference edges (`CALLS`, `OVERRIDES`, `CREATES`, `CATCHES`, `USES_TYPE`, `RETURNS_TYPE`), graph query API (callers/callees/paths), `context/07_call_graph.md` | ✅ done |
-| 4+ | Spring/Spark/SQL analyzers, Neo4j, Qdrant, retrieval, context packs, Ollama | ⏳ planned |
+| 4 | Spring analyzer: stereotypes (`@RestController`/`@Service`/`@Repository`/…), HTTP endpoints (`Endpoint` nodes, `EXPOSES`/`MAPPED_TO`), DI (`INJECTS`), `@Bean`/`@ExceptionHandler` (`HANDLES`), endpoint→service→repository flow in `context/06_api_endpoints.md` | ✅ done |
+| 5+ | Spark/SQL analyzers, Neo4j, Qdrant, retrieval, context packs, Ollama | ⏳ planned |
 
 ## Quick start
 
@@ -34,11 +35,13 @@ Outputs land in `<java-project>/.code-memory/`:
 ├── project_inventory.json
 ├── context/
 │   ├── 00_project_overview.md
+│   ├── 06_api_endpoints.md  # Spring: endpoints + controller→service→repository flow
 │   └── 07_call_graph.md     # per-method calls / called-by, with confidence
 ├── graph/
-│   ├── nodes.json          # types, methods, fields, packages, files
+│   ├── nodes.json          # types, methods, fields, packages, files, endpoints
 │   ├── edges.json          # CONTAINS/DECLARES/EXTENDS/IMPLEMENTS/IMPORTS/ANNOTATED_WITH/THROWS
 │   │                       #  + CALLS/OVERRIDES/CREATES/CATCHES/USES_TYPE/RETURNS_TYPE
+│   │                       #  + EXPOSES/MAPPED_TO/INJECTS/HANDLES (Spring)
 │   └── graph_summary.json
 └── reports/
     ├── unresolved_symbols.md
