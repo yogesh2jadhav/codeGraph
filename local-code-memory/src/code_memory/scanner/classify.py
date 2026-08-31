@@ -72,8 +72,16 @@ def classify(rel_path: str) -> FileKind:
         return FileKind.DOC
 
     # -- scripts --------------------------------------------
+    if lower in ("mvnw", "mvnw.cmd", "gradlew", "gradlew.bat"):
+        return FileKind.SCRIPT
     if lower.endswith((".sh", ".bash", ".ps1")) or "/scripts/" in p or "/bin/" in p:
         return FileKind.SCRIPT
+
+    # -- IDE / VCS project metadata (kept, but not "unknown") ----------
+    if lower in (".classpath", ".project", ".factorypath", ".gitattributes",
+                 ".gitignore", ".editorconfig", ".dockerignore") or \
+            "/.settings/" in p:
+        return FileKind.BUILD_OTHER
 
     # -- resources by source tree --------------------------
     if "/src/test/resources/" in p:
