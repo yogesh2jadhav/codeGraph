@@ -81,6 +81,9 @@ class MethodRef:
     arg_count: int | None = None
     type_text: str | None = None
     line: int = 0
+    # For "call"/"create": raw text of the first argument if it is a string
+    # literal (used by the SQL / Spark analyzers), else None.
+    first_string_arg: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

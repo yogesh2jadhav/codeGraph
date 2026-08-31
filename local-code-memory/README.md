@@ -15,7 +15,9 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 | 2 | Java semantic scan (tree-sitter): packages, types, methods, constructors, fields, params, annotations, imports, inheritance — with source locations — into a normalized code graph (`graph/nodes.json`, `graph/edges.json`) | ✅ done |
 | 3 | Syntactic call graph + reference edges (`CALLS`, `OVERRIDES`, `CREATES`, `CATCHES`, `USES_TYPE`, `RETURNS_TYPE`), graph query API (callers/callees/paths), `context/07_call_graph.md` | ✅ done |
 | 4 | Spring analyzer: stereotypes (`@RestController`/`@Service`/`@Repository`/…), HTTP endpoints (`Endpoint` nodes, `EXPOSES`/`MAPPED_TO`), DI (`INJECTS`), `@Bean`/`@ExceptionHandler` (`HANDLES`), endpoint→service→repository flow in `context/06_api_endpoints.md` | ✅ done |
-| 5+ | Spark/SQL analyzers, Neo4j, Qdrant, retrieval, context packs, Ollama | ⏳ planned |
+| 5 | Spark analyzer: detects Spark jobs, transformations/actions, input/output tables & paths, `spark.sql` bridge → `context/12_spark.md` | ✅ done |
+| 6 | SQL analyzer: SQL from `@Query`/string literals/text blocks/`.sql` files, parsed with sqlglot → `SQLStatement`/`Table` nodes, `EXECUTES_SQL`/`READS_TABLE`/`WRITES_TABLE`, `context/13_sql.md` | ✅ done |
+| 7+ | Neo4j, Qdrant, retrieval, context packs, Ollama | ⏳ planned |
 
 ## Quick start
 
@@ -36,12 +38,15 @@ Outputs land in `<java-project>/.code-memory/`:
 ├── context/
 │   ├── 00_project_overview.md
 │   ├── 06_api_endpoints.md  # Spring: endpoints + controller→service→repository flow
-│   └── 07_call_graph.md     # per-method calls / called-by, with confidence
+│   ├── 07_call_graph.md     # per-method calls / called-by, with confidence
+│   ├── 12_spark.md          # Spark jobs: transformations, actions, table/path I/O
+│   └── 13_sql.md            # SQL statements + tables (read/write)
 ├── graph/
-│   ├── nodes.json          # types, methods, fields, packages, files, endpoints
+│   ├── nodes.json          # types, methods, fields, packages, files, endpoints, SQL, tables
 │   ├── edges.json          # CONTAINS/DECLARES/EXTENDS/IMPLEMENTS/IMPORTS/ANNOTATED_WITH/THROWS
 │   │                       #  + CALLS/OVERRIDES/CREATES/CATCHES/USES_TYPE/RETURNS_TYPE
 │   │                       #  + EXPOSES/MAPPED_TO/INJECTS/HANDLES (Spring)
+│   │                       #  + EXECUTES_SQL/READS_TABLE/WRITES_TABLE (SQL + Spark)
 │   └── graph_summary.json
 └── reports/
     ├── unresolved_symbols.md
