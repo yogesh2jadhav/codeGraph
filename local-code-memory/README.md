@@ -12,7 +12,8 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 | --- | --- | --- |
 | 0 | Repo, config, structured logging, CLI skeleton, docker-compose, SQLite metadata, health checks | ✅ done |
 | 1 | Repository inventory scanner (file classification, hashes, build/framework detection, `project_inventory.json`, `00_project_overview.md`) | ✅ done |
-| 2+ | Java semantic scan, relationships, Spring/Spark/SQL analyzers, Neo4j, Qdrant, retrieval, context packs, Ollama | ⏳ planned |
+| 2 | Java semantic scan (tree-sitter): packages, types, methods, constructors, fields, params, annotations, imports, inheritance — with source locations — into a normalized code graph (`graph/nodes.json`, `graph/edges.json`) | ✅ done |
+| 3+ | Call graph & relationships, Spring/Spark/SQL analyzers, Neo4j, Qdrant, retrieval, context packs, Ollama | ⏳ planned |
 
 ## Quick start
 
@@ -21,8 +22,8 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 ../.venv/bin/pip install -e "local-code-memory[dev]"
 
 cd local-code-memory
-../.venv/bin/python -m code_memory.cli.main doctor
-../.venv/bin/python -m code_memory.cli.main scan --project /path/to/java-project
+../.venv/bin/python -m code_memory doctor
+../.venv/bin/python -m code_memory --project /path/to/java-project scan
 ```
 
 Outputs land in `<java-project>/.code-memory/`:
@@ -30,9 +31,18 @@ Outputs land in `<java-project>/.code-memory/`:
 ```
 .code-memory/
 ├── project_inventory.json
-└── context/
-    └── 00_project_overview.md
+├── context/
+│   └── 00_project_overview.md
+├── graph/
+│   ├── nodes.json          # types, methods, fields, packages, files
+│   ├── edges.json          # CONTAINS / DECLARES / EXTENDS / IMPLEMENTS / IMPORTS / ANNOTATED_WITH / THROWS
+│   └── graph_summary.json
+└── reports/
+    ├── unresolved_symbols.md
+    └── parse_report.md
 ```
+
+Add `--inventory-only` to `scan` to skip the Phase 2 graph build.
 
 ## Configuration
 

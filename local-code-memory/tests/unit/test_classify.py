@@ -25,6 +25,11 @@ from code_memory.scanner.classify import classify
     ("scripts/run.sh", FileKind.SCRIPT),
     ("src/main/resources/logback.xml", FileKind.RESOURCE),
     ("src/test/resources/fixture.json", FileKind.TEST_RESOURCE),
+    ("mvnw", FileKind.SCRIPT),
+    ("gradlew.bat", FileKind.SCRIPT),
+    (".classpath", FileKind.BUILD_OTHER),
+    (".settings/org.eclipse.jdt.core.prefs", FileKind.BUILD_OTHER),
+    (".gitignore", FileKind.BUILD_OTHER),
     ("random/notes.txt", FileKind.OTHER),
 ])
 def test_classify(path, expected):

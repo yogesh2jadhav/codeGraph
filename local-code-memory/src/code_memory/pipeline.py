@@ -27,11 +27,13 @@ class ScanContext:
     store: MetadataStore
 
 
-def run_scan(config: Config, *, mode: str = "full") -> tuple[ScanContext, ScanResult]:
-    """Run a Phase 1 inventory scan and persist its state.
+def run_scan(config: Config, *, mode: str = "full",
+             semantic: bool = True) -> tuple[ScanContext, ScanResult]:
+    """Run a Phase 1 inventory scan (+ optional Phase 2 Java semantic scan).
 
     ``mode`` is ``full`` | ``incremental`` | ``rebuild``. For ``incremental`` the
     previous scan's file hashes are diffed so callers can act on just the delta.
+    ``semantic`` controls whether the Java semantic scan / graph build runs.
     """
     scan_id = uuid.uuid4().hex
     token = bind(scan_id=scan_id)
@@ -73,7 +75,27 @@ def run_scan(config: Config, *, mode: str = "full") -> tuple[ScanContext, ScanRe
 
         for w in inv.warnings:
             store.record_event(scan_id, "warning", w, phase="inventory")
-        for art in result.artifacts:
+
+        # -- Phase 2: Java semantic scan + graph build --------------------
+        java_result = None
+        if semantic:
+            from code_memory.scanner import JavaSemanticScanner
+
+            try:
+                java_result = JavaSemanticScanner(config).scan(inv)
+                for s in java_result.skipped:
+                    store.record_event(scan_id, "warning", s, phase="java")
+            except Exception as exc:  # never let Phase 2 kill a scan
+                store.record_event(scan_id, "error",
+                                   f"java semantic scan failed: {exc}",
+                                   phase="java")
+                log.error("java semantic scan failed", extra={"error": str(exc)})
+
+        all_artifacts = list(result.artifacts)
+        if java_result:
+            all_artifacts += java_result.artifacts
+            result.java = java_result
+        for art in all_artifacts:
             try:
                 store.record_artifact(scan_id, str(art),
                                       "json" if art.suffix == ".json" else "markdown",
@@ -93,6 +115,8 @@ def run_scan(config: Config, *, mode: str = "full") -> tuple[ScanContext, ScanRe
             "duration_ms": result.duration_ms,
             "build_system": inv.build.build_system,
         }
+        if java_result:
+            stats["java"] = java_result.stats()
         status = "partial" if inv.warnings else "success"
         store.finish_scan(scan_id, status, stats)
 

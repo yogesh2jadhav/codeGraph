@@ -16,6 +16,8 @@ authors = [{ name = "yogesh" }]
 # in the phases that actually need them so the scanner stays lightweight.
 dependencies = [
     "PyYAML>=6.0",
+    "tree-sitter>=0.23",
+    "tree-sitter-java>=0.23",
 ]
 
 [project.optional-dependencies]
