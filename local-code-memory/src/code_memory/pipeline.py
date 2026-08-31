@@ -118,6 +118,18 @@ def run_scan(config: Config, *, mode: str = "full", semantic: bool = True,
                                    f"vector index failed: {exc}", phase="vector")
                 log.warning("vector index failed", extra={"error": str(exc)})
 
+            # -- Phase 10: full markdown context pack --------------------
+            try:
+                from code_memory.context import generate_context_pack
+
+                pack = generate_context_pack(config, java_result, inv, scan_id)
+                result.context_pack = [str(p) for p in pack]
+            except Exception as exc:
+                store.record_event(scan_id, "warning",
+                                   f"context pack failed: {exc}", phase="context")
+                log.warning("context pack generation failed",
+                            extra={"error": str(exc)})
+
         all_artifacts = list(result.artifacts)
         if java_result:
             all_artifacts += java_result.artifacts
@@ -146,6 +158,8 @@ def run_scan(config: Config, *, mode: str = "full", semantic: bool = True,
             stats["java"] = java_result.stats()
         if getattr(result, "vector", None):
             stats["vector"] = result.vector
+        if getattr(result, "context_pack", None):
+            stats["context_pack_files"] = len(result.context_pack)
         status = "partial" if inv.warnings else "success"
         store.finish_scan(scan_id, status, stats)
 

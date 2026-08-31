@@ -19,10 +19,7 @@ from code_memory.logging_setup import configure_logging, get_logger
 
 log = get_logger("cli")
 
-_PENDING = {
-    "context": "Phase 11 (task-specific context generator)",
-    "export": "Phase 10 (markdown memory generator)",
-}
+_PENDING: dict[str, str] = {}
 
 
 def _load(args: argparse.Namespace) -> Config:
@@ -210,6 +207,45 @@ def cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_context(args: argparse.Namespace) -> int:
+    cfg = _load(args)
+    if not args.task:
+        # Phase 10 - regenerate the full pack via an incremental scan
+        from code_memory.pipeline import run_scan
+
+        _, result = run_scan(cfg, mode="incremental")
+        pack = getattr(result, "context_pack", None) or []
+        print(f"regenerated context pack: {len(pack)} files under "
+              f"{cfg.output_dir / 'context'}")
+        return 0
+
+    # Phase 11 - task-specific pack
+    from code_memory.context import generate_task_context
+
+    pack = generate_task_context(cfg, args.task)
+    print(f"task pack: {pack.directory}")
+    print(f"  files: {', '.join(f.name for f in pack.files)}")
+    print(f"  est. tokens: {pack.est_tokens}"
+          + ("  (OVER BUDGET)" if pack.est_tokens >
+             cfg.get('context.max_tokens', 24000) else ""))
+    print(f"  seed symbols: {', '.join(pack.symbols[:8])}")
+
+    if args.ask:
+        from code_memory.llm import CodingAdvisor
+
+        advisor = CodingAdvisor(cfg)
+        advice = advisor.advise(pack.directory, args.task)
+        print(f"\nadvice ({advice.provider}:{advice.model}) -> "
+              f"{pack.directory / 'advice.md'}")
+        if advice.parsed:
+            print(f"  {advice.parsed.get('summary', '')}")
+            print(f"  confidence: {advice.parsed.get('confidence')}")
+            for fc in (advice.parsed.get("files_to_change") or [])[:10]:
+                if isinstance(fc, dict):
+                    print(f"    change {fc.get('file')} ({fc.get('lines', '?')})")
+    return 0
+
+
 def cmd_pending(name: str):
     def _run(args: argparse.Namespace) -> int:
         print(f"`code-memory {name}` is not implemented yet - arrives in {_PENDING[name]}.")
@@ -265,6 +301,9 @@ def _print_scan_summary(ctx, result) -> None:
     if vec:
         print(f"  vector index:  {vec.get('chunks')} chunks "
               f"({vec.get('embedding')})")
+    cpack = getattr(result, "context_pack", None)
+    if cpack:
+        print(f"  context pack:  {len(cpack)} files")
 
     for art in result.artifacts:
         print(f"  wrote:         {art}")
@@ -320,6 +359,15 @@ def build_parser() -> argparse.ArgumentParser:
     sg = sub.add_parser("graph", help="graph stats, or a node + its neighbours")
     sg.add_argument("symbol", nargs="?", help="FQN, node id, or a name substring")
     sg.set_defaults(func=cmd_graph)
+
+    sc = sub.add_parser("context",
+                        help="regenerate the full context pack, or build a "
+                             "task-specific pack")
+    sc.add_argument("task", nargs="?",
+                    help="natural-language task; omit to regenerate the full pack")
+    sc.add_argument("--ask", action="store_true",
+                    help="also send the task pack to the local LLM (writes advice.md)")
+    sc.set_defaults(func=cmd_context)
 
     for name in _PENDING:
         sub.add_parser(name, help=f"[pending: {_PENDING[name]}]"

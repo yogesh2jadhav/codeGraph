@@ -46,6 +46,7 @@ class ScanResult:
     artifacts: list[Path] = field(default_factory=list)
     java: "object | None" = None  # JavaScanResult, set by the pipeline (Phase 2)
     vector: "dict | None" = None  # vector index stats, set by the pipeline (Phase 8)
+    context_pack: "list | None" = None  # context pack paths, set by pipeline (Phase 10)
 
     @property
     def changed(self) -> bool:

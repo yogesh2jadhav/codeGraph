@@ -9,7 +9,8 @@ def test_cli_scan_stats_validate(spring_sample, tmp_path, capsys, monkeypatch):
     (cfg_dir / "application.yaml").write_text(
         f"project:\n  root: {spring_sample}\n"
         f"storage:\n  metadata: {tmp_path / 'm.db'}\n"
-        "logging:\n  file:\n    enabled: false\n",
+        "logging:\n  file:\n    enabled: false\n"
+        "llm:\n  provider: echo\n",   # keep the advisor offline + deterministic
         encoding="utf-8",
     )
     args_base = ["-c", str(cfg_dir / "application.yaml")]
@@ -36,7 +37,17 @@ def test_cli_scan_stats_validate(spring_sample, tmp_path, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert "direct callers" in out
 
+    # Phase 10/11: full pack regen + a task pack
+    assert main(args_base + ["context"]) == 0
+    assert "context pack" in capsys.readouterr().out
 
-def test_cli_pending_command_reports_phase(capsys):
-    assert main(["context"]) == 2
-    assert "Phase 11" in capsys.readouterr().out
+    assert main(args_base + ["context", "add logging when user creation fails",
+                             "--ask"]) == 0
+    out = capsys.readouterr().out
+    assert "task pack:" in out and "advice (echo:" in out
+
+
+def test_cli_unknown_command_errors(capsys):
+    import pytest
+    with pytest.raises(SystemExit):
+        main(["frobnicate"])

@@ -20,7 +20,10 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 | 7 | `GraphRepository` (in-memory default, optional Neo4j) + `code-memory impact` / `graph` | ✅ done |
 | 8 | Vector index: entity chunker, local embeddings (hashing default, optional Ollama/sentence-transformers), in-memory store (optional Qdrant) | ✅ done |
 | 9 | Hybrid retrieval (lexical + vector + symbol + graph expansion, RRF fusion) + reranker, `code-memory search` | ✅ done |
-| 10+ | Markdown context pack, task context generator, Ollama coding advisor, git integration, incremental, patches | ⏳ planned |
+| 10 | Full Markdown context pack (`context/00`–`14` + `manifest.json` + `reports/quality_report.md`), all generated from the graph | ✅ done |
+| 11 | Task context generator — `code-memory context "<task>"` → compact token-budgeted pack under `.code-memory/tasks/<id>/` | ✅ done |
+| 12 | Local LLM integration — `LLMProvider` (Ollama, offline Echo fallback), `CodingAdvisor`, `code-memory context "<task>" --ask` → `advice.md` | ✅ done |
+| 13–16 | Coding-advisor task modes, git diff impact, incremental memory, patch generation | ⏳ planned |
 
 ## Quick start
 
@@ -38,12 +41,14 @@ Outputs land in `<java-project>/.code-memory/`:
 ```
 .code-memory/
 ├── project_inventory.json
-├── context/
-│   ├── 00_project_overview.md
-│   ├── 06_api_endpoints.md  # Spring: endpoints + controller→service→repository flow
-│   ├── 07_call_graph.md     # per-method calls / called-by, with confidence
-│   ├── 12_spark.md          # Spark jobs: transformations, actions, table/path I/O
-│   └── 13_sql.md            # SQL statements + tables (read/write)
+├── manifest.json           # scan id, versions, git, graph stats, artifact list
+├── context/                # 00–14, all generated from the graph on every scan
+│   ├── 00_project_overview.md   01_architecture.md      02_modules.md
+│   ├── 03_dependencies.md       04_configuration.md     05_database.md
+│   ├── 06_api_endpoints.md      07_call_graph.md        08_data_flow.md
+│   ├── 09_exception_flow.md     10_logging.md           11_tests.md
+│   ├── 12_spark.md              13_sql.md               14_ai_coding_instructions.md
+├── tasks/                  # one dir per `code-memory context "<task>"`
 ├── graph/
 │   ├── nodes.json          # types, methods, fields, packages, files, endpoints, SQL, tables
 │   ├── edges.json          # CONTAINS/DECLARES/EXTENDS/IMPLEMENTS/IMPORTS/ANNOTATED_WITH/THROWS
@@ -55,7 +60,8 @@ Outputs land in `<java-project>/.code-memory/`:
 │   └── index.json          # entity chunks + embeddings (in-memory store)
 └── reports/
     ├── unresolved_symbols.md
-    └── parse_report.md
+    ├── parse_report.md
+    └── quality_report.md   # measured extraction metrics
 ```
 
 Add `--inventory-only` to `scan` to skip the Phase 2 graph build.
@@ -72,6 +78,21 @@ Add `--inventory-only` to `scan` to skip the Phase 2 graph build.
 reciprocal-rank fused, then reranked). `impact` reports direct/transitive callers,
 callees, tests and related SQL/types. `graph` (no arg) prints backend stats;
 with a symbol it prints that node and its neighbours.
+
+```bash
+# regenerate the full context/ pack
+../.venv/bin/python -m code_memory --project /path context
+
+# build a compact task pack, then ask the local LLM for a change plan
+../.venv/bin/python -m code_memory --project /path context "add retry when the payment service fails" --ask
+```
+
+`context "<task>"` writes `.code-memory/tasks/task_<date>_<n>/` with `task.md`,
+`relevant_symbols.md`, `source_context.md`, `call_graph.md`, `data_flow.md`,
+`sql.md`, `tests.md`, `configuration.md`, `relevant_files.md`, `llm_prompt.md`
+— retrieved + graph-expanded and kept under `context.max_tokens`. `--ask` sends
+it to the configured `LLMProvider` (Ollama; offline `echo` stub if none) and
+writes `advice.md` / `advice.json` with a structured, file:line-cited plan.
 
 Graph and vector default to in-memory (no servers). Set `graph.provider: neo4j`
 / `vector.provider: qdrant` (with `pip install "local-code-memory[neo4j,qdrant]"`
