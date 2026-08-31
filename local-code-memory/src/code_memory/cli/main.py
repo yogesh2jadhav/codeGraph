@@ -54,7 +54,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
     cfg = _load(args)
     mode = "incremental" if args.incremental else "full"
-    ctx, result = run_scan(cfg, mode=mode)
+    ctx, result = run_scan(cfg, mode=mode, semantic=not args.inventory_only)
     _print_scan_summary(ctx, result)
     return 0
 
@@ -152,8 +152,21 @@ def _print_scan_summary(ctx, result) -> None:
         print(f"      {kind:16} {n}")
     if inv.warnings:
         print(f"  warnings:      {len(inv.warnings)} (see reports)")
+
+    java = getattr(result, "java", None)
+    if java is not None:
+        c = java.graph.counts()
+        print(f"  java parse:    {java.status_counts}")
+        print(f"  graph:         {c['node_count']} nodes, {c['edge_count']} edges, "
+              f"{c['unresolved_count']} unresolved")
+        for kind, n in c["nodes_by_kind"].items():
+            print(f"      {kind:16} {n}")
+
     for art in result.artifacts:
         print(f"  wrote:         {art}")
+    if java is not None:
+        for art in java.artifacts:
+            print(f"  wrote:         {art}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -169,9 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init", help="create .code-memory dirs and metadata db"
                    ).set_defaults(func=cmd_init)
 
-    sp = sub.add_parser("scan", help="scan the repository (Phase 1 inventory)")
+    sp = sub.add_parser("scan", help="scan the repository (inventory + Java graph)")
     sp.add_argument("--incremental", action="store_true",
                     help="only diff against the previous scan")
+    sp.add_argument("--inventory-only", action="store_true",
+                    help="skip the Phase 2 Java semantic scan / graph build")
     sp.set_defaults(func=cmd_scan)
 
     sub.add_parser("rebuild", help="discard tracked state and full-scan"
