@@ -21,8 +21,8 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 ../.venv/bin/pip install -e "local-code-memory[dev]"
 
 cd local-code-memory
-../.venv/bin/python -m code_memory.cli.main doctor
-../.venv/bin/python -m code_memory.cli.main scan --project /path/to/java-project
+../.venv/bin/python -m code_memory doctor
+../.venv/bin/python -m code_memory --project /path/to/java-project scan
 ```
 
 Outputs land in `<java-project>/.code-memory/`:
