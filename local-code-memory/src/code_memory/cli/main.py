@@ -20,10 +20,7 @@ from code_memory.logging_setup import configure_logging, get_logger
 log = get_logger("cli")
 
 _PENDING = {
-    "search": "Phase 9 (hybrid retrieval)",
-    "impact": "Phase 3+ (call graph / impact analysis)",
     "context": "Phase 11 (task-specific context generator)",
-    "graph": "Phase 7 (graph DB)",
     "export": "Phase 10 (markdown memory generator)",
 }
 
@@ -130,6 +127,89 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if not problems else 1
 
 
+def _resolve_symbol(repo, term: str) -> str | None:
+    """Best-effort: turn a user string into a graph node id."""
+    if repo.get_node(term):
+        return term
+    for prefix in ("method:", "type:", "field:", "endpoint:", "table:"):
+        if repo.get_node(prefix + term):
+            return prefix + term
+    matches = repo.find_nodes(name_contains=term)
+    exact = [n for n in matches if n.get("fqn") == term or n["name"] == term]
+    pool = exact or matches
+    pool.sort(key=lambda n: len(n["id"]))
+    return pool[0]["id"] if pool else None
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    from code_memory.retrieval import build_retriever
+
+    cfg = _load(args)
+    retriever = build_retriever(cfg)
+    items = retriever.retrieve(args.query, top_k=args.k)
+    if args.json:
+        print(json.dumps([i.to_dict() for i in items], indent=2))
+        return 0
+    if not items:
+        print("no results (has the repo been scanned?)")
+        return 0
+    for i, it in enumerate(items, 1):
+        loc = f"{it.file}:{it.line}" if it.file else "-"
+        print(f"{i:2}. [{it.score:.3f}] {it.kind:11} {it.fqn or it.node_id}")
+        print(f"     {loc}   sources={','.join(it.sources)}")
+    return 0
+
+
+def cmd_impact(args: argparse.Namespace) -> int:
+    from code_memory.graph.repository import get_graph_repository
+
+    cfg = _load(args)
+    repo = get_graph_repository(cfg)
+    node_id = _resolve_symbol(repo, args.symbol)
+    if node_id is None:
+        print(f"symbol not found: {args.symbol}")
+        return 1
+    result = repo.find_impact(node_id, max_depth=args.depth)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0
+    print(f"impact of {node_id}")
+    print(f"  direct callers:     {len(result['direct_callers'])}")
+    for c in result["direct_callers"][:20]:
+        print(f"    <- {c}")
+    print(f"  transitive callers: {len(result['transitive_callers'])}")
+    print(f"  callees:            {len(result['callees'])}")
+    if result.get("tests"):
+        print(f"  tests:              {len(result['tests'])}")
+        for t in result["tests"][:10]:
+            print(f"    T  {t}")
+    for etype, hits in (result.get("related") or {}).items():
+        print(f"  {etype}: {', '.join(h.split(':', 1)[-1] for h in hits[:8])}")
+    return 0
+
+
+def cmd_graph(args: argparse.Namespace) -> int:
+    from code_memory.graph.repository import get_graph_repository
+
+    cfg = _load(args)
+    repo = get_graph_repository(cfg)
+    if not args.symbol:
+        print(json.dumps(repo.stats(), indent=2))
+        return 0
+    node_id = _resolve_symbol(repo, args.symbol)
+    if node_id is None:
+        print(f"symbol not found: {args.symbol}")
+        return 1
+    node = repo.get_node(node_id)
+    print(f"{node_id}  [{node.get('kind')}]")
+    if node.get("location"):
+        loc = node["location"]
+        print(f"  {loc.get('relative_path')}:{loc.get('line_start')}")
+    for nb in repo.neighbors(node_id, direction="both"):
+        print(f"  {nb['edge']:14} {nb['id']}  ({nb.get('confidence')})")
+    return 0
+
+
 def cmd_pending(name: str):
     def _run(args: argparse.Namespace) -> int:
         print(f"`code-memory {name}` is not implemented yet - arrives in {_PENDING[name]}.")
@@ -181,6 +261,11 @@ def _print_scan_summary(ctx, result) -> None:
         for kind, n in c["nodes_by_kind"].items():
             print(f"      {kind:16} {n}")
 
+    vec = getattr(result, "vector", None)
+    if vec:
+        print(f"  vector index:  {vec.get('chunks')} chunks "
+              f"({vec.get('embedding')})")
+
     for art in result.artifacts:
         print(f"  wrote:         {art}")
     if java is not None:
@@ -219,6 +304,22 @@ def build_parser() -> argparse.ArgumentParser:
                    ).set_defaults(func=cmd_doctor)
     sub.add_parser("validate", help="validate config and generated artifacts"
                    ).set_defaults(func=cmd_validate)
+
+    ss = sub.add_parser("search", help="hybrid retrieval over the code memory")
+    ss.add_argument("query")
+    ss.add_argument("-k", type=int, default=10, help="results to return")
+    ss.add_argument("--json", action="store_true")
+    ss.set_defaults(func=cmd_search)
+
+    si = sub.add_parser("impact", help="impact analysis for a symbol")
+    si.add_argument("symbol", help="FQN, node id, or a name substring")
+    si.add_argument("--depth", type=int, default=4)
+    si.add_argument("--json", action="store_true")
+    si.set_defaults(func=cmd_impact)
+
+    sg = sub.add_parser("graph", help="graph stats, or a node + its neighbours")
+    sg.add_argument("symbol", nargs="?", help="FQN, node id, or a name substring")
+    sg.set_defaults(func=cmd_graph)
 
     for name in _PENDING:
         sub.add_parser(name, help=f"[pending: {_PENDING[name]}]"

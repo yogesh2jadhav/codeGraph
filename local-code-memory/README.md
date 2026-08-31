@@ -17,7 +17,10 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 | 4 | Spring analyzer: stereotypes (`@RestController`/`@Service`/`@Repository`/…), HTTP endpoints (`Endpoint` nodes, `EXPOSES`/`MAPPED_TO`), DI (`INJECTS`), `@Bean`/`@ExceptionHandler` (`HANDLES`), endpoint→service→repository flow in `context/06_api_endpoints.md` | ✅ done |
 | 5 | Spark analyzer: detects Spark jobs, transformations/actions, input/output tables & paths, `spark.sql` bridge → `context/12_spark.md` | ✅ done |
 | 6 | SQL analyzer: SQL from `@Query`/string literals/text blocks/`.sql` files, parsed with sqlglot → `SQLStatement`/`Table` nodes, `EXECUTES_SQL`/`READS_TABLE`/`WRITES_TABLE`, `context/13_sql.md` | ✅ done |
-| 7+ | Neo4j, Qdrant, retrieval, context packs, Ollama | ⏳ planned |
+| 7 | `GraphRepository` (in-memory default, optional Neo4j) + `code-memory impact` / `graph` | ✅ done |
+| 8 | Vector index: entity chunker, local embeddings (hashing default, optional Ollama/sentence-transformers), in-memory store (optional Qdrant) | ✅ done |
+| 9 | Hybrid retrieval (lexical + vector + symbol + graph expansion, RRF fusion) + reranker, `code-memory search` | ✅ done |
+| 10+ | Markdown context pack, task context generator, Ollama coding advisor, git integration, incremental, patches | ⏳ planned |
 
 ## Quick start
 
@@ -48,12 +51,33 @@ Outputs land in `<java-project>/.code-memory/`:
 │   │                       #  + EXPOSES/MAPPED_TO/INJECTS/HANDLES (Spring)
 │   │                       #  + EXECUTES_SQL/READS_TABLE/WRITES_TABLE (SQL + Spark)
 │   └── graph_summary.json
+├── vector/
+│   └── index.json          # entity chunks + embeddings (in-memory store)
 └── reports/
     ├── unresolved_symbols.md
     └── parse_report.md
 ```
 
 Add `--inventory-only` to `scan` to skip the Phase 2 graph build.
+
+## Querying a scanned repo
+
+```bash
+../.venv/bin/python -m code_memory --project /path search "add retry to payment calls"
+../.venv/bin/python -m code_memory --project /path impact PaymentService.processPayment
+../.venv/bin/python -m code_memory --project /path graph processPayment
+```
+
+`search` runs hybrid retrieval (lexical + vector + symbol + call-graph expansion,
+reciprocal-rank fused, then reranked). `impact` reports direct/transitive callers,
+callees, tests and related SQL/types. `graph` (no arg) prints backend stats;
+with a symbol it prints that node and its neighbours.
+
+Graph and vector default to in-memory (no servers). Set `graph.provider: neo4j`
+/ `vector.provider: qdrant` (with `pip install "local-code-memory[neo4j,qdrant]"`
+and `docker compose up -d`) to use the real backends. Embeddings default to
+dependency-free feature-hashing; set `embedding.provider: ollama` for
+`nomic-embed-text`.
 
 ## Configuration
 

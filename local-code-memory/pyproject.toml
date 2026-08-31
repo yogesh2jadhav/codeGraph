@@ -25,6 +25,9 @@ dependencies = [
 dev = [
     "pytest>=7.4",
 ]
+neo4j = ["neo4j>=5"]
+qdrant = ["qdrant-client>=1.7"]
+embeddings = ["sentence-transformers>=2.2"]
 
 [project.scripts]
 code-memory = "code_memory.cli.main:main"

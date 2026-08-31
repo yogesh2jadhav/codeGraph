@@ -26,16 +26,23 @@ DEFAULTS: dict[str, Any] = {
     "project": {"root": ".", "output_dir": ".code-memory"},
     "storage": {"metadata": "./data/metadata.db"},
     "graph": {
-        "provider": "neo4j",
+        # "memory" (default, no server) or "neo4j"
+        "provider": "memory",
         "uri": "bolt://localhost:7687",
         "username": "neo4j",
         "password": "neo4j",
         "database": "neo4j",
     },
     "vector": {
-        "provider": "qdrant",
+        # "memory" (default, no server) or "qdrant"
+        "provider": "memory",
         "url": "http://localhost:6333",
         "collection": "code_memory",
+    },
+    "retrieval": {
+        "reranker": "lexical",       # lexical | none | cross-encoder
+        "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        "vector_k": 30,
     },
     "llm": {
         "provider": "ollama",
@@ -44,7 +51,12 @@ DEFAULTS: dict[str, Any] = {
         "context_window": 32768,
         "temperature": 0.1,
     },
-    "embedding": {"provider": "local", "model": "configurable"},
+    "embedding": {
+        # "local" (hashing, default) | "ollama" | "sentence-transformers"
+        "provider": "local",
+        "model": "configurable",
+        "dim": 512,
+    },
     "scanner": {
         "incremental": True,
         "include_tests": True,
