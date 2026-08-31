@@ -26,6 +26,7 @@ from code_memory.models.graph import CodeGraph
 from code_memory.models.inventory import FileKind, ProjectInventory
 from code_memory.parsers.java import java_available, parse_java_source
 from code_memory.graph import build_graph
+from code_memory.analyzers.spring import SpringModel, analyze_spring
 
 log = get_logger("scanner.java")
 
@@ -40,15 +41,19 @@ class JavaScanResult:
     duration_ms: int = 0
     artifacts: list[Path] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    spring: SpringModel | None = None
 
     def stats(self) -> dict:
-        return {
+        s = {
             "java_files_parsed": len(self.parsed_files),
             "parse_status": self.status_counts,
             "skipped": len(self.skipped),
             **self.graph.counts(),
             "duration_ms": self.duration_ms,
         }
+        if self.spring is not None:
+            s["spring"] = self.spring.counts()
+        return s
 
 
 class JavaSemanticScanner:
@@ -83,9 +88,15 @@ class JavaSemanticScanner:
 
         graph = build_graph(parsed)
 
+        try:
+            spring = analyze_spring(parsed, graph)
+        except Exception as exc:  # never let an analyzer abort the scan
+            log.error("spring analyzer failed", extra={"error": str(exc)})
+            spring = None
+
         result = JavaScanResult(
             graph=graph, parsed_files=parsed, status_counts=counts,
-            skipped=skipped,
+            skipped=skipped, spring=spring,
             duration_ms=int((time.perf_counter() - started) * 1000),
         )
         if write_artifacts:
@@ -113,10 +124,11 @@ class JavaSemanticScanner:
                               encoding="utf-8")
         edges_path.write_text(json.dumps(graph.edges_json(), indent=2) + "\n",
                               encoding="utf-8")
-        summary_path.write_text(
-            json.dumps({**graph.counts(),
-                        "parse_status": result.status_counts},
-                       indent=2) + "\n", encoding="utf-8")
+        summary = {**graph.counts(), "parse_status": result.status_counts}
+        if result.spring is not None:
+            summary["spring"] = result.spring.counts()
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n",
+                                encoding="utf-8")
 
         unresolved_path = reports_dir / "unresolved_symbols.md"
         unresolved_path.write_text(_render_unresolved(graph), encoding="utf-8")
@@ -129,8 +141,16 @@ class JavaSemanticScanner:
         callgraph_path = context_dir / "07_call_graph.md"
         callgraph_path.write_text(_render_call_graph(graph), encoding="utf-8")
 
-        return [nodes_path, edges_path, summary_path, unresolved_path,
-                parse_path, callgraph_path]
+        written = [nodes_path, edges_path, summary_path, unresolved_path,
+                   parse_path, callgraph_path]
+
+        if result.spring is not None and result.spring.is_spring():
+            api_path = context_dir / "06_api_endpoints.md"
+            api_path.write_text(_render_api_endpoints(graph, result.spring),
+                                encoding="utf-8")
+            written.append(api_path)
+
+        return written
 
 
 def _render_unresolved(graph: CodeGraph) -> str:
@@ -145,6 +165,68 @@ def _render_unresolved(graph: CodeGraph) -> str:
     lines += ["| Kind | Symbol |", "| --- | --- |"]
     for n in rows:
         lines.append(f"| {n.kind} | `{n.name}` |")
+    return "\n".join(lines) + "\n"
+
+
+def _render_api_endpoints(graph: CodeGraph, spring) -> str:
+    """Endpoint table + per-endpoint call flow (HTTP -> controller -> service ->
+    repository), reconstructed from CALLS edges. Only in-scan methods appear in
+    the flow; external calls are omitted for brevity."""
+    from code_memory.graph import queries
+
+    lines = ["# 06 - API endpoints", "",
+             "> Generated (Phase 4, Spring analyzer). Annotation-based; the call "
+             "flow uses the syntactic call graph - trust the confidence tags.",
+             ""]
+
+    c = spring.counts()
+    lines.append(f"- Components: **{c['components']}** "
+                 f"{c['components_by_stereotype']}")
+    lines.append(f"- Endpoints: **{c['endpoints']}**  "
+                 f"Beans: {c['beans']}  Exception handlers: "
+                 f"{c['exception_handlers']}  Injections: {c['injections']}")
+    lines.append("")
+
+    if not spring.endpoints:
+        lines.append("_No HTTP endpoints detected._")
+        return "\n".join(lines) + "\n"
+
+    lines += ["| HTTP | Path | Handler | Location |", "| --- | --- | --- | --- |"]
+    for ep in sorted(spring.endpoints, key=lambda e: (e["path"], e["http_method"])):
+        lines.append(f"| {ep['http_method']} | `{ep['path']}` | "
+                     f"`{ep['handler'].split('#')[-1]}` | {ep['location']} |")
+    lines.append("")
+
+    def stereo_of(method_id: str) -> str:
+        owner = graph.get(method_id)
+        if owner is None:
+            return ""
+        owner_fqn = owner.properties.get("owner", "")
+        t = graph.get(f"type:{owner_fqn}")
+        return t.properties.get("spring_stereotype", "") if t else ""
+
+    lines += ["## Call flow per endpoint", ""]
+    for ep in sorted(spring.endpoints, key=lambda e: e["path"]):
+        handler_id = f"method:{ep['handler']}"
+        lines.append(f"### `{ep['http_method']} {ep['path']}`")
+        lines.append(f"handler `{ep['handler']}` - {ep['location']}")
+        seen = {handler_id}
+        frontier = [(handler_id, 0)]
+        flow: list[str] = []
+        while frontier:
+            node_id, depth = frontier.pop(0)
+            if depth >= 4:
+                continue
+            for e in queries.find_callees(graph, node_id):
+                if not e["id"].startswith("method:") or e["id"] in seen:
+                    continue
+                seen.add(e["id"])
+                tag = stereo_of(e["id"]) or "?"
+                flow.append(f"{'  ' * depth}-> `{e['id'][len('method:'):]}` "
+                            f"[{tag}] ({e['confidence']})")
+                frontier.append((e["id"], depth + 1))
+        lines += flow if flow else ["_no resolved downstream calls_"]
+        lines.append("")
     return "\n".join(lines) + "\n"
 
 
