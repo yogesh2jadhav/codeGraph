@@ -27,10 +27,21 @@ from code_memory.models.inventory import FileKind, ProjectInventory
 from code_memory.parsers.java import java_available, parse_java_source
 from code_memory.graph import build_graph
 from code_memory.analyzers.spring import SpringModel, analyze_spring
+from code_memory.analyzers.spark import SparkModel, analyze_spark
+from code_memory.analyzers.sql import SqlModel, analyze_sql
 
 log = get_logger("scanner.java")
 
 _JAVA_KINDS = {FileKind.JAVA_MAIN, FileKind.JAVA_TEST}
+
+
+def _safe(name: str, fn):
+    """Run an analyzer, logging and swallowing any failure (never fatal)."""
+    try:
+        return fn()
+    except Exception as exc:  # pragma: no cover - defensive
+        log.error(f"{name} analyzer failed", extra={"error": str(exc)})
+        return None
 
 
 @dataclass
@@ -42,6 +53,8 @@ class JavaScanResult:
     artifacts: list[Path] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     spring: SpringModel | None = None
+    spark: SparkModel | None = None
+    sql: SqlModel | None = None
 
     def stats(self) -> dict:
         s = {
@@ -53,6 +66,10 @@ class JavaScanResult:
         }
         if self.spring is not None:
             s["spring"] = self.spring.counts()
+        if self.spark is not None and self.spark.detected:
+            s["spark"] = self.spark.counts()
+        if self.sql is not None and self.sql.is_present():
+            s["sql"] = self.sql.counts()
         return s
 
 
@@ -88,15 +105,13 @@ class JavaSemanticScanner:
 
         graph = build_graph(parsed)
 
-        try:
-            spring = analyze_spring(parsed, graph)
-        except Exception as exc:  # never let an analyzer abort the scan
-            log.error("spring analyzer failed", extra={"error": str(exc)})
-            spring = None
+        spring = _safe("spring", lambda: analyze_spring(parsed, graph))
+        spark = _safe("spark", lambda: analyze_spark(parsed, graph))
+        sql = _safe("sql", lambda: analyze_sql(self.root, parsed, inventory, graph))
 
         result = JavaScanResult(
             graph=graph, parsed_files=parsed, status_counts=counts,
-            skipped=skipped, spring=spring,
+            skipped=skipped, spring=spring, spark=spark, sql=sql,
             duration_ms=int((time.perf_counter() - started) * 1000),
         )
         if write_artifacts:
@@ -127,6 +142,10 @@ class JavaSemanticScanner:
         summary = {**graph.counts(), "parse_status": result.status_counts}
         if result.spring is not None:
             summary["spring"] = result.spring.counts()
+        if result.spark is not None and result.spark.detected:
+            summary["spark"] = result.spark.counts()
+        if result.sql is not None and result.sql.is_present():
+            summary["sql"] = result.sql.counts()
         summary_path.write_text(json.dumps(summary, indent=2) + "\n",
                                 encoding="utf-8")
 
@@ -150,6 +169,16 @@ class JavaSemanticScanner:
                                 encoding="utf-8")
             written.append(api_path)
 
+        if result.sql is not None and result.sql.is_present():
+            sql_path = context_dir / "13_sql.md"
+            sql_path.write_text(_render_sql(graph, result.sql), encoding="utf-8")
+            written.append(sql_path)
+
+        if result.spark is not None and result.spark.is_present():
+            spark_path = context_dir / "12_spark.md"
+            spark_path.write_text(_render_spark(result.spark), encoding="utf-8")
+            written.append(spark_path)
+
         return written
 
 
@@ -165,6 +194,77 @@ def _render_unresolved(graph: CodeGraph) -> str:
     lines += ["| Kind | Symbol |", "| --- | --- |"]
     for n in rows:
         lines.append(f"| {n.kind} | `{n.name}` |")
+    return "\n".join(lines) + "\n"
+
+
+def _render_sql(graph: CodeGraph, sql) -> str:
+    c = sql.counts()
+    lines = ["# 13 - SQL", "",
+             "> Generated (Phase 6). SQL pulled from @Query, string literals, "
+             "text blocks and .sql files; tables via sqlglot (regex fallback).",
+             "",
+             f"- Statements: **{c['sql_statements']}** {c['sql_by_type']} "
+             f"(parsed cleanly: {c['sql_parsed_ok']})",
+             f"- Tables: **{c['tables']}**",
+             ""]
+
+    lines += ["## Statements", "",
+              "| Type | Reads | Writes | Where |", "| --- | --- | --- | --- |"]
+    for info in sorted(sql.statements.values(),
+                       key=lambda i: (i["statement_type"], i["id"])):
+        src = info["sources"][0]
+        where = f"{src['file']}:{src['line']}"
+        extra = f" (+{len(info['sources']) - 1})" if len(info["sources"]) > 1 else ""
+        lines.append(
+            f"| {info['statement_type']} "
+            f"| {', '.join(info['tables_read']) or '-'} "
+            f"| {', '.join(info['tables_written']) or '-'} "
+            f"| {where}{extra} |")
+    lines.append("")
+
+    # table -> which statements touch it
+    reads: dict[str, list[str]] = {}
+    writes: dict[str, list[str]] = {}
+    for e in graph.edges:
+        if e.type == "READS_TABLE" and e.src.startswith("sql:"):
+            reads.setdefault(e.dst, []).append(e.src)
+        elif e.type == "WRITES_TABLE" and e.src.startswith("sql:"):
+            writes.setdefault(e.dst, []).append(e.src)
+    tables = sorted(set(reads) | set(writes))
+    if tables:
+        lines += ["## Tables", "", "| Table | Read by | Written by |",
+                  "| --- | ---: | ---: |"]
+        for t in tables:
+            lines.append(f"| `{t[len('table:'):]}` | {len(reads.get(t, []))} "
+                         f"| {len(writes.get(t, []))} |")
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def _render_spark(spark) -> str:
+    c = spark.counts()
+    lines = ["# 12 - Spark", "",
+             "> Generated (Phase 5). Heuristic - Spark API calls recognised by "
+             "name from the syntactic call graph.",
+             "",
+             f"- Spark jobs: **{c['spark_jobs']}**",
+             f"- Input tables: {c['spark_input_tables'] or '-'}",
+             f"- Output tables: {c['spark_output_tables'] or '-'}",
+             ""]
+    for job in sorted(spark.jobs, key=lambda j: j.method_fqn):
+        lines.append(f"## `{job.method_fqn}`")
+        lines.append(f"_{job.location}_")
+        lines.append(f"- transformations: {', '.join(job.transformations) or '-'}")
+        lines.append(f"- actions: {', '.join(job.actions) or '-'}")
+        if job.reads_tables:
+            lines.append(f"- reads tables: {', '.join(job.reads_tables)}")
+        if job.writes_tables:
+            lines.append(f"- writes tables: {', '.join(job.writes_tables)}")
+        if job.paths:
+            lines.append(f"- file paths: {', '.join(job.paths)}")
+        if job.sql_calls:
+            lines.append(f"- spark.sql() calls: {job.sql_calls} (see 13_sql.md)")
+        lines.append("")
     return "\n".join(lines) + "\n"
 
 

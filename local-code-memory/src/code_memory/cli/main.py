@@ -168,6 +168,16 @@ def _print_scan_summary(ctx, result) -> None:
             print(f"  spring:        {sc['components']} components "
                   f"{sc['components_by_stereotype']}, {sc['endpoints']} endpoints, "
                   f"{sc['beans']} beans, {sc['injections']} injections")
+        sql = getattr(java, "sql", None)
+        if sql is not None and sql.is_present():
+            qc = sql.counts()
+            print(f"  sql:           {qc['sql_statements']} statements "
+                  f"{qc['sql_by_type']}, {qc['tables']} tables")
+        spark = getattr(java, "spark", None)
+        if spark is not None and spark.is_present():
+            kc = spark.counts()
+            print(f"  spark:         {kc['spark_jobs']} jobs, "
+                  f"in={kc['spark_input_tables']} out={kc['spark_output_tables']}")
         for kind, n in c["nodes_by_kind"].items():
             print(f"      {kind:16} {n}")
 

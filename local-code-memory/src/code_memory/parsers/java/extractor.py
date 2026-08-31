@@ -295,6 +295,22 @@ def _arg_count(arg_list_node) -> int:
     return sum(1 for c in arg_list_node.children if c.is_named)
 
 
+def _first_string_arg(source: bytes, arg_list_node) -> str | None:
+    """Return the decoded content of the first argument iff it is a plain
+    string literal or text block (used by the SQL / Spark analyzers)."""
+    if arg_list_node is None:
+        return None
+    first = next((c for c in arg_list_node.children if c.is_named), None)
+    if first is None:
+        return None
+    if first.type in ("string_literal", "multiline_string_literal", "text_block"):
+        raw = node_text(source, first)
+        if raw.startswith('"""'):
+            return raw.strip('"').strip()
+        return raw[1:-1] if len(raw) >= 2 else raw
+    return None
+
+
 def _body_references(source: bytes, body) -> list[MethodRef]:
     """Collect calls / object creations / catch types / local var types from a
     method body. Recurses through all statements and lambdas but stops at nested
@@ -316,6 +332,7 @@ def _body_references(source: bytes, body) -> list[MethodRef]:
                 name=node_text(source, name) if name is not None else "?",
                 receiver_text=_norm(node_text(source, obj)) if obj is not None else None,
                 arg_count=_arg_count(args),
+                first_string_arg=_first_string_arg(source, args),
                 line=n.start_point[0] + 1,
             ))
         elif n.type == "object_creation_expression":
@@ -324,7 +341,9 @@ def _body_references(source: bytes, body) -> list[MethodRef]:
             if t is not None:
                 refs.append(MethodRef(
                     kind="create", type_text=_norm(node_text(source, t)),
-                    arg_count=_arg_count(args), line=n.start_point[0] + 1,
+                    arg_count=_arg_count(args),
+                    first_string_arg=_first_string_arg(source, args),
+                    line=n.start_point[0] + 1,
                 ))
         elif n.type == "local_variable_declaration":
             t = n.child_by_field_name("type")
