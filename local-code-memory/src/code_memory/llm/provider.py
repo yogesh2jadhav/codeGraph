@@ -47,6 +47,11 @@ class EchoProvider(LLMProvider):
         self.model = model
 
     def generate(self, *, system, prompt, temperature=0.1) -> LLMResponse:
+        if "unified diff" in prompt.lower():
+            return LLMResponse(
+                "# EchoProvider produced no patch - configure llm.provider: "
+                "ollama.\n# (no diff)\n", self.model, self.name,
+                {"offline": True})
         task = ""
         for line in prompt.splitlines():
             if line.strip().startswith(("> ", "Task:")):

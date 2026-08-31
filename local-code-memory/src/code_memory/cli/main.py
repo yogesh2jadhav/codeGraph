@@ -230,19 +230,62 @@ def cmd_context(args: argparse.Namespace) -> int:
              cfg.get('context.max_tokens', 24000) else ""))
     print(f"  seed symbols: {', '.join(pack.symbols[:8])}")
 
-    if args.ask:
+    if args.ask or args.patch:
         from code_memory.llm import CodingAdvisor
 
         advisor = CodingAdvisor(cfg)
-        advice = advisor.advise(pack.directory, args.task)
-        print(f"\nadvice ({advice.provider}:{advice.model}) -> "
+        advice = advisor.advise(pack.directory, args.task, mode=args.mode,
+                                patch=args.patch)
+        print(f"\nadvice [{advice.mode}] ({advice.provider}:{advice.model}) -> "
               f"{pack.directory / 'advice.md'}")
-        if advice.parsed:
-            print(f"  {advice.parsed.get('summary', '')}")
-            print(f"  confidence: {advice.parsed.get('confidence')}")
-            for fc in (advice.parsed.get("files_to_change") or [])[:10]:
+        p = advice.parsed or {}
+        if p:
+            print(f"  {p.get('summary') or p.get('root_cause') or ''}")
+            print(f"  confidence/risk: {p.get('confidence') or p.get('risk_level')}")
+            for fc in (p.get("files_to_change") or [])[:10]:
                 if isinstance(fc, dict):
                     print(f"    change {fc.get('file')} ({fc.get('lines', '?')})")
+        if advice.patch:
+            print(f"  patch -> {advice.patch['path']}  "
+                  f"(git apply --check: {advice.patch['apply_check']})")
+            print("  NOT applied - review it, then `git apply` yourself.")
+    return 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    from code_memory.git import change_impact
+
+    cfg = _load(args)
+    ci = change_impact(cfg, args.ref)
+    if not ci.diff.available:
+        print(f"git diff unavailable: {ci.diff.error}")
+        return 1
+    s = ci.summary()
+    print(f"change impact for {args.ref} (base {ci.diff.base_resolved})")
+    print(f"  changed files:    {s['changed_files']}")
+    print(f"  changed symbols:  {s['changed_symbols']}")
+    for sym in ci.changed_symbols[:20]:
+        print(f"    ~ {sym}")
+    print(f"  impacted callers: {s['impacted_callers']}")
+    print(f"  impacted tests:   {s['impacted_tests']}")
+    print(f"  impacted endpoints/SQL: {s['impacted_endpoints']}/{s['impacted_sql']}")
+    print(f"  wrote: {cfg.output_dir / 'change_impact.md'}")
+    return 0
+
+
+def cmd_clean(args: argparse.Namespace) -> int:
+    import shutil
+
+    cfg = _load(args)
+    target = cfg.output_dir
+    if not target.exists():
+        print(f"nothing to clean at {target}")
+        return 0
+    if not args.yes:
+        print(f"would remove {target}  (re-run with --yes)")
+        return 0
+    shutil.rmtree(target)
+    print(f"removed {target}")
     return 0
 
 
@@ -299,8 +342,12 @@ def _print_scan_summary(ctx, result) -> None:
 
     vec = getattr(result, "vector", None)
     if vec:
+        extra = ""
+        if "embedded" in vec:
+            extra = (f", {vec['embedded']} embedded / {vec.get('reused', 0)} "
+                     f"reused / {vec.get('pruned', 0)} pruned")
         print(f"  vector index:  {vec.get('chunks')} chunks "
-              f"({vec.get('embedding')})")
+              f"({vec.get('embedding')}){extra}")
     cpack = getattr(result, "context_pack", None)
     if cpack:
         print(f"  context pack:  {len(cpack)} files")
@@ -367,7 +414,21 @@ def build_parser() -> argparse.ArgumentParser:
                     help="natural-language task; omit to regenerate the full pack")
     sc.add_argument("--ask", action="store_true",
                     help="also send the task pack to the local LLM (writes advice.md)")
+    sc.add_argument("--mode", default="implement_feature",
+                    help="advisor mode: implement_feature | find_fix | debug | "
+                         "add_logging | refactor | impact_analysis")
+    sc.add_argument("--patch", action="store_true",
+                    help="also ask the LLM for a unified diff (patch.diff; never applied)")
     sc.set_defaults(func=cmd_context)
+
+    sd = sub.add_parser("diff", help="map a git diff onto the graph -> change_impact.md")
+    sd.add_argument("ref", nargs="?", default="HEAD",
+                    help="git ref or A..B range (default: HEAD vs working tree)")
+    sd.set_defaults(func=cmd_diff)
+
+    scl = sub.add_parser("clean", help="remove the .code-memory directory")
+    scl.add_argument("--yes", action="store_true", help="actually delete")
+    scl.set_defaults(func=cmd_clean)
 
     for name in _PENDING:
         sub.add_parser(name, help=f"[pending: {_PENDING[name]}]"

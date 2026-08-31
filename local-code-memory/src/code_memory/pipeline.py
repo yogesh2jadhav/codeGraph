@@ -111,7 +111,8 @@ def run_scan(config: Config, *, mode: str = "full", semantic: bool = True,
                                           embedding_name=emb.name)
                 vstats = build_vector_index(
                     java_result.graph, java_result.parsed_files,
-                    config.project_root, emb, vstore)
+                    config.project_root, emb, vstore,
+                    incremental=(mode != "rebuild"))
                 result.vector = vstats
             except Exception as exc:
                 store.record_event(scan_id, "warning",
