@@ -45,6 +45,7 @@ class ScanResult:
     duration_ms: int = 0
     artifacts: list[Path] = field(default_factory=list)
     java: "object | None" = None  # JavaScanResult, set by the pipeline (Phase 2)
+    vector: "dict | None" = None  # vector index stats, set by the pipeline (Phase 8)
 
     @property
     def changed(self) -> bool:

@@ -25,6 +25,17 @@ def test_cli_scan_stats_validate(spring_sample, tmp_path, capsys, monkeypatch):
     assert main(args_base + ["validate"]) == 0
     assert "validate: ok" in capsys.readouterr().out
 
+    # Phase 7-9 commands over the freshly scanned repo
+    assert main(args_base + ["graph"]) == 0
+    assert '"backend": "memory"' in capsys.readouterr().out
+
+    assert main(args_base + ["search", "create a user", "-k", "3"]) == 0
+    assert "UserService" in capsys.readouterr().out
+
+    assert main(args_base + ["impact", "createUser"]) == 0
+    out = capsys.readouterr().out
+    assert "direct callers" in out
+
 
 def test_cli_pending_command_reports_phase(capsys):
     assert main(["context"]) == 2

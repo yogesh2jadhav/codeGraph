@@ -17,16 +17,24 @@ storage:
   metadata: "./data/metadata.db"
 
 graph:
-  provider: neo4j
+  # "memory" needs no server (reads .code-memory/graph/*.json); "neo4j" needs
+  # `docker compose up -d` and the `neo4j` driver.
+  provider: memory
   uri: bolt://localhost:7687
   username: neo4j
   password: neo4j
   database: neo4j
 
 vector:
-  provider: qdrant
+  # "memory" needs no server (.code-memory/vector/index.json); "qdrant" needs
+  # `docker compose up -d` and the `qdrant-client` package.
+  provider: memory
   url: http://localhost:6333
   collection: code_memory
+
+retrieval:
+  reranker: lexical          # lexical | none | cross-encoder
+  vector_k: 30
 
 llm:
   provider: ollama
@@ -36,9 +44,11 @@ llm:
   temperature: 0.1
 
 embedding:
+  # "local" = dependency-free feature-hashing (default). "ollama" uses a local
+  # embed model (nomic-embed-text); "sentence-transformers" needs that package.
   provider: local
-  # Selected model is benchmarked per-repo; keep configurable.
   model: configurable
+  dim: 512
 
 scanner:
   incremental: true

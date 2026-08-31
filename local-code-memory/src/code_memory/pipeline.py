@@ -27,13 +27,14 @@ class ScanContext:
     store: MetadataStore
 
 
-def run_scan(config: Config, *, mode: str = "full",
-             semantic: bool = True) -> tuple[ScanContext, ScanResult]:
-    """Run a Phase 1 inventory scan (+ optional Phase 2 Java semantic scan).
+def run_scan(config: Config, *, mode: str = "full", semantic: bool = True,
+             index: bool = True) -> tuple[ScanContext, ScanResult]:
+    """Run inventory (+ Java semantic scan + graph/vector indexing).
 
     ``mode`` is ``full`` | ``incremental`` | ``rebuild``. For ``incremental`` the
     previous scan's file hashes are diffed so callers can act on just the delta.
-    ``semantic`` controls whether the Java semantic scan / graph build runs.
+    ``semantic`` controls the Java semantic scan / graph build; ``index``
+    controls Phase 7/8 persistence (graph repository + vector index).
     """
     scan_id = uuid.uuid4().hex
     token = bind(scan_id=scan_id)
@@ -91,6 +92,32 @@ def run_scan(config: Config, *, mode: str = "full",
                                    phase="java")
                 log.error("java semantic scan failed", extra={"error": str(exc)})
 
+        # -- Phase 7/8: graph repository + vector index -----------------
+        if java_result and index and java_result.graph.nodes:
+            try:
+                from code_memory.graph.repository import get_graph_repository
+
+                get_graph_repository(config).replace_graph(java_result.graph)
+            except Exception as exc:
+                store.record_event(scan_id, "warning",
+                                   f"graph persistence failed: {exc}", phase="graph")
+                log.warning("graph persistence failed", extra={"error": str(exc)})
+            try:
+                from code_memory.embeddings import get_embedding_provider
+                from code_memory.vector import build_vector_index, get_vector_store
+
+                emb = get_embedding_provider(config)
+                vstore = get_vector_store(config, dim=emb.dim,
+                                          embedding_name=emb.name)
+                vstats = build_vector_index(
+                    java_result.graph, java_result.parsed_files,
+                    config.project_root, emb, vstore)
+                result.vector = vstats
+            except Exception as exc:
+                store.record_event(scan_id, "warning",
+                                   f"vector index failed: {exc}", phase="vector")
+                log.warning("vector index failed", extra={"error": str(exc)})
+
         all_artifacts = list(result.artifacts)
         if java_result:
             all_artifacts += java_result.artifacts
@@ -117,6 +144,8 @@ def run_scan(config: Config, *, mode: str = "full",
         }
         if java_result:
             stats["java"] = java_result.stats()
+        if getattr(result, "vector", None):
+            stats["vector"] = result.vector
         status = "partial" if inv.warnings else "success"
         store.finish_scan(scan_id, status, stats)
 
