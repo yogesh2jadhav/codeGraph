@@ -53,6 +53,43 @@ def system_prompt(config: Config) -> str:
     return _load("system.md", _DEFAULT_SYSTEM)
 
 
-def render_task_prompt(task: str, config: Config, template: str = "implement_feature.md") -> str:
-    body = _load(template, _DEFAULT_FEATURE)
+# advisor task modes (PLAN.md §13/§39) -> prompt template file
+MODES = {
+    "implement_feature": "implement_feature.md",
+    "find_fix": "find_fix.md",
+    "debug": "debug.md",
+    "add_logging": "add_logging.md",
+    "refactor": "refactor.md",
+    "impact_analysis": "impact_analysis.md",
+}
+_MODE_ALIASES = {
+    "feature": "implement_feature", "implement": "implement_feature",
+    "fix": "find_fix", "bug": "find_fix", "logging": "add_logging",
+    "log": "add_logging", "impact": "impact_analysis", "analyze": "impact_analysis",
+}
+
+
+def resolve_mode(mode: str | None) -> str:
+    if not mode:
+        return "implement_feature"
+    m = mode.strip().lower().replace("-", "_")
+    m = _MODE_ALIASES.get(m, m)
+    if m not in MODES:
+        raise ValueError(f"unknown mode '{mode}'. choose from: "
+                         f"{', '.join(sorted(MODES))}")
+    return m
+
+
+def render_task_prompt(task: str, config: Config, *, mode: str | None = None,
+                       template: str | None = None) -> str:
+    tpl = template or MODES[resolve_mode(mode)]
+    body = _load(tpl, _DEFAULT_FEATURE)
     return body.replace("{{TASK}}", task.strip())
+
+
+def render_patch_prompt(task: str, plan_text: str, config: Config) -> str:
+    body = _load("generate_patch.md",
+                 "Produce a unified diff implementing:\n\n{{TASK}}\n\n"
+                 "Plan:\n{{PLAN}}\n\nOutput a unified diff only.")
+    return body.replace("{{TASK}}", task.strip()).replace("{{PLAN}}",
+                                                          plan_text.strip())

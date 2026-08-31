@@ -76,6 +76,25 @@ class InMemoryVectorStore(VectorStore):
     def count(self) -> int:
         return len(self._chunks)
 
+    def vectors_by_text_hash(self) -> dict[str, list[float]]:
+        """{sha1(chunk.text): vector} for incremental re-embedding (Phase 15)."""
+        import hashlib
+
+        out: dict[str, list[float]] = {}
+        for chunk, vec in zip(self._chunks, self._vectors):
+            h = hashlib.sha1(chunk.text.encode("utf-8")).hexdigest()
+            out[h] = vec
+        return out
+
+    def prune_to(self, keep_ids: set[str]) -> int:
+        """Drop chunks whose id is not in ``keep_ids``. Returns removed count."""
+        before = len(self._chunks)
+        pairs = [(c, v) for c, v in zip(self._chunks, self._vectors)
+                 if c.id in keep_ids]
+        self._chunks = [c for c, _ in pairs]
+        self._vectors = [v for _, v in pairs]
+        return before - len(self._chunks)
+
     # -- persistence ---------------------------------------------
     def save(self) -> None:
         if not self.path:

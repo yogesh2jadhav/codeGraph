@@ -44,7 +44,7 @@ def test_cli_scan_stats_validate(spring_sample, tmp_path, capsys, monkeypatch):
     assert main(args_base + ["context", "add logging when user creation fails",
                              "--ask"]) == 0
     out = capsys.readouterr().out
-    assert "task pack:" in out and "advice (echo:" in out
+    assert "task pack:" in out and "advice [implement_feature] (echo:" in out
 
 
 def test_cli_unknown_command_errors(capsys):

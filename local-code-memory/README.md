@@ -23,7 +23,12 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 | 10 | Full Markdown context pack (`context/00`–`14` + `manifest.json` + `reports/quality_report.md`), all generated from the graph | ✅ done |
 | 11 | Task context generator — `code-memory context "<task>"` → compact token-budgeted pack under `.code-memory/tasks/<id>/` | ✅ done |
 | 12 | Local LLM integration — `LLMProvider` (Ollama, offline Echo fallback), `CodingAdvisor`, `code-memory context "<task>" --ask` → `advice.md` | ✅ done |
-| 13–16 | Coding-advisor task modes, git diff impact, incremental memory, patch generation | ⏳ planned |
+| 13 | Advisor task modes — `--mode implement_feature\|find_fix\|debug\|add_logging\|refactor\|impact_analysis` | ✅ done |
+| 14 | Git integration — `code-memory diff <ref>` maps a diff onto the graph → `change_impact.md` | ✅ done |
+| 15 | Incremental memory — `scan --incremental` re-embeds only changed chunks, prunes stale ones; `code-memory clean` | ✅ done |
+| 16 | Patch generation — `context "<task>" --ask --patch` → `patch.diff` (+ `git apply --check`), **never auto-applied** | ✅ done |
+
+**All 17 phases (0–16) implemented.**
 
 ## Quick start
 
@@ -58,6 +63,7 @@ Outputs land in `<java-project>/.code-memory/`:
 │   └── graph_summary.json
 ├── vector/
 │   └── index.json          # entity chunks + embeddings (in-memory store)
+├── change_impact.md        # written by `code-memory diff`
 └── reports/
     ├── unresolved_symbols.md
     ├── parse_report.md
@@ -93,6 +99,18 @@ with a symbol it prints that node and its neighbours.
 — retrieved + graph-expanded and kept under `context.max_tokens`. `--ask` sends
 it to the configured `LLMProvider` (Ollama; offline `echo` stub if none) and
 writes `advice.md` / `advice.json` with a structured, file:line-cited plan.
+`--mode` picks the advisor prompt (`find_fix`, `debug`, `add_logging`,
+`refactor`, `impact_analysis`); `--patch` also asks for a `patch.diff` and runs
+`git apply --check` on it — it is never applied for you.
+
+```bash
+# what does this commit / branch actually touch?
+../.venv/bin/python -m code_memory --project /path diff HEAD~1
+../.venv/bin/python -m code_memory --project /path diff main..feature
+
+# re-scan after edits — only changed chunks are re-embedded
+../.venv/bin/python -m code_memory --project /path scan --incremental
+```
 
 Graph and vector default to in-memory (no servers). Set `graph.provider: neo4j`
 / `vector.provider: qdrant` (with `pip install "local-code-memory[neo4j,qdrant]"`
