@@ -1,0 +1,15 @@
+# Logging configuration for Local Code Memory itself.
+logging:
+  level: INFO
+  console: true
+  structured: true          # emit JSON lines when true, human text when false
+  file:
+    enabled: true
+    path: "./logs/code-memory.log"
+  # Per-logger overrides (dotted logger names under "code_memory.").
+  levels:
+    scanner: INFO
+    graph: INFO
+    vector: INFO
+    retrieval: DEBUG
+    llm: INFO

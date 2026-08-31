@@ -1,0 +1,85 @@
+# Local Code Memory - main configuration.
+#
+# All behaviour is configuration-driven. Any value here can be overridden with
+# an environment variable using the prefix CODE_MEMORY__ and "__" as the nesting
+# separator, e.g. CODE_MEMORY__LLM__MODEL=qwen3-coder:14b
+# A project-local ./config/application.local.yaml (git-ignored) is deep-merged
+# on top of this file when present.
+
+project:
+  # Root of the Java repository to scan. Relative paths resolve against CWD.
+  root: "./sample-project"
+  # Where generated Code Memory artifacts are written (inside the scanned repo).
+  output_dir: ".code-memory"
+
+storage:
+  # SQLite metadata DB - independent from Neo4j and Qdrant.
+  metadata: "./data/metadata.db"
+
+graph:
+  provider: neo4j
+  uri: bolt://localhost:7687
+  username: neo4j
+  password: neo4j
+  database: neo4j
+
+vector:
+  provider: qdrant
+  url: http://localhost:6333
+  collection: code_memory
+
+llm:
+  provider: ollama
+  base_url: http://localhost:11434
+  model: qwen3-coder:30b
+  context_window: 32768
+  temperature: 0.1
+
+embedding:
+  provider: local
+  # Selected model is benchmarked per-repo; keep configurable.
+  model: configurable
+
+scanner:
+  incremental: true
+  include_tests: true
+  include_resources: true
+  max_file_size_mb: 10
+  # Directories never walked during inventory / scanning.
+  exclude_dirs:
+    - ".git"
+    - ".idea"
+    - ".code-memory"
+    - "target"
+    - "build"
+    - "out"
+    - "node_modules"
+    - ".gradle"
+    - ".mvn"
+
+context:
+  max_tokens: 24000
+  max_files: 30
+  max_methods: 50
+  max_graph_hops: 3
+  max_vector_results: 30
+  rerank_results: 10
+
+security:
+  # Local-first. Only these hosts may be contacted.
+  network_allowlist:
+    - "127.0.0.1:11434"
+    - "127.0.0.1:6333"
+    - "127.0.0.1:7687"
+    - "localhost:11434"
+    - "localhost:6333"
+    - "localhost:7687"
+  # Substrings that mark a config key/value as a secret to redact.
+  secret_markers:
+    - "password"
+    - "secret"
+    - "token"
+    - "api_key"
+    - "apikey"
+    - "private_key"
+    - "credential"

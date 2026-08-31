@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-code-memory"
+version = "0.1.0"
+description = "Local Code Memory & Local LLM Coding Assistant for Java backend repositories"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "yogesh" }]
+
+# Runtime dependencies are intentionally minimal for Phase 0/1.
+# Heavier deps (neo4j, qdrant-client, embedding runtimes, FastAPI) are added
+# in the phases that actually need them so the scanner stays lightweight.
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+]
+
+[project.scripts]
+code-memory = "code_memory.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
