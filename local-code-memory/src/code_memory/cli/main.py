@@ -159,6 +159,9 @@ def _print_scan_summary(ctx, result) -> None:
         print(f"  java parse:    {java.status_counts}")
         print(f"  graph:         {c['node_count']} nodes, {c['edge_count']} edges, "
               f"{c['unresolved_count']} unresolved")
+        if c.get("call_edges"):
+            print(f"  calls:         {c['call_edges']} edges, "
+                  f"resolution {c['call_resolution_rate']} {c['calls_by_confidence']}")
         for kind, n in c["nodes_by_kind"].items():
             print(f"      {kind:16} {n}")
 

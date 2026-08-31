@@ -108,12 +108,22 @@ class CodeGraph:
             by_node_kind[n.kind] = by_node_kind.get(n.kind, 0) + 1
         for e in self._edges.values():
             by_edge_type[e.type] = by_edge_type.get(e.type, 0) + 1
+        calls = [e for e in self._edges.values() if e.type == "CALLS"]
+        calls_by_conf: dict[str, int] = {}
+        for e in calls:
+            calls_by_conf[e.confidence.value] = \
+                calls_by_conf.get(e.confidence.value, 0) + 1
+        resolved_calls = sum(v for k, v in calls_by_conf.items() if k != "UNKNOWN")
         return {
             "node_count": len(self._nodes),
             "edge_count": len(self._edges),
             "unresolved_count": len(self.unresolved()),
             "nodes_by_kind": dict(sorted(by_node_kind.items())),
             "edges_by_type": dict(sorted(by_edge_type.items())),
+            "call_edges": len(calls),
+            "calls_by_confidence": dict(sorted(calls_by_conf.items())),
+            "call_resolution_rate": round(resolved_calls / len(calls), 3)
+            if calls else None,
         }
 
     def extend(self, nodes: Iterable[Node], edges: Iterable[Edge]) -> None:

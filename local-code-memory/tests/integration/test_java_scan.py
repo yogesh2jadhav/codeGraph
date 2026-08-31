@@ -27,6 +27,12 @@ def test_pipeline_writes_graph_artifacts(spring_sample, config_for):
     svc = next(n for n in nodes if n["id"] == "type:com.example.UserService")
     assert svc["location"]["relative_path"].endswith("UserService.java")
 
+    # Phase 3 ground truth: createUser -> UserRepository.save, resolved
+    calls = {(e["src"], e["dst"]) for e in edges if e["type"] == "CALLS"}
+    assert ("method:com.example.UserService#createUser(String)",
+            "method:com.example.UserRepository#save(User)") in calls
+    assert (out / "context" / "07_call_graph.md").is_file()
+
     # summary persisted into scan stats
     scan = ctx.store.get_scan(ctx.scan_id)
     stats = json.loads(scan["stats_json"])
