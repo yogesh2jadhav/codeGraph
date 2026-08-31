@@ -2,3 +2,6 @@
 .venv/
 __pycache__/
 *.pyc
+data/
+logs/
+.code-memory/

@@ -63,6 +63,30 @@ class Parameter:
 
 
 @dataclass
+class MethodRef:
+    """A raw reference found inside a method/constructor body (unresolved).
+
+    kind: "call" | "create" | "catch" | "localvar"
+      call     - a method invocation; ``name`` is the method, ``receiver_text``
+                 the textual receiver (None / "this" / "super" / "Foo" / expr),
+                 ``arg_count`` the number of arguments.
+      create   - ``new X(...)``; ``type_text`` = X, ``arg_count`` set.
+      catch    - a catch clause; ``type_text`` may be "A | B".
+      localvar - a local variable declaration; ``name`` + ``type_text``.
+    """
+
+    kind: str
+    name: str = ""
+    receiver_text: str | None = None
+    arg_count: int | None = None
+    type_text: str | None = None
+    line: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class MethodDecl:
     name: str
     kind: EntityKind                # METHOD or CONSTRUCTOR
@@ -75,6 +99,7 @@ class MethodDecl:
     modifiers: list[str] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
     type_parameters: list[str] = field(default_factory=list)
+    references: list[MethodRef] = field(default_factory=list)
 
     @property
     def signature(self) -> str:

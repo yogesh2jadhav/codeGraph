@@ -124,7 +124,13 @@ class JavaSemanticScanner:
         parse_path = reports_dir / "parse_report.md"
         parse_path.write_text(_render_parse_report(result), encoding="utf-8")
 
-        return [nodes_path, edges_path, summary_path, unresolved_path, parse_path]
+        context_dir = out / "context"
+        context_dir.mkdir(parents=True, exist_ok=True)
+        callgraph_path = context_dir / "07_call_graph.md"
+        callgraph_path.write_text(_render_call_graph(graph), encoding="utf-8")
+
+        return [nodes_path, edges_path, summary_path, unresolved_path,
+                parse_path, callgraph_path]
 
 
 def _render_unresolved(graph: CodeGraph) -> str:
@@ -139,6 +145,66 @@ def _render_unresolved(graph: CodeGraph) -> str:
     lines += ["| Kind | Symbol |", "| --- | --- |"]
     for n in rows:
         lines.append(f"| {n.kind} | `{n.name}` |")
+    return "\n".join(lines) + "\n"
+
+
+def _render_call_graph(graph: CodeGraph) -> str:
+    """Per-method 'calls / called-by' listing for methods declared in this scan.
+
+    Bounded output: external call targets are collapsed; only in-scan methods get
+    a section. Confidence is shown so the reader knows how much to trust a link.
+    """
+    from code_memory.graph import queries
+
+    methods = sorted(
+        (n for n in graph.nodes
+         if n.kind in ("Method", "Constructor")
+         and not n.properties.get("external")
+         and not n.properties.get("placeholder")),
+        key=lambda n: n.properties.get("fqn", n.id),
+    )
+    c = graph.counts()
+    lines = [
+        "# 07 - Call graph", "",
+        "> Generated (Phase 3). Syntactic call graph - resolved with local "
+        "heuristics, not a full type system. Trust the confidence tags.",
+        "",
+        f"- CALLS edges: **{c['call_edges']}**  "
+        f"(resolution rate {c['call_resolution_rate']})",
+        f"- by confidence: {c['calls_by_confidence']}",
+        "",
+    ]
+    if not methods:
+        lines.append("_No in-scan methods._")
+        return "\n".join(lines) + "\n"
+
+    def short(node_id: str) -> str:
+        if node_id.startswith("method:"):
+            return node_id[len("method:"):]
+        if node_id.startswith("extmethod:"):
+            return node_id[len("extmethod:"):] + " _(external)_"
+        return node_id
+
+    for n in methods:
+        loc = n.properties.get("location", {})
+        where = f"{loc.get('relative_path', '?')}:{loc.get('line_start', '?')}"
+        callees = queries.find_callees(graph, n.id)
+        callers = queries.find_callers(graph, n.id)
+        lines.append(f"## `{n.properties.get('fqn', n.name)}`")
+        lines.append(f"_{where}_")
+        lines.append("")
+        if callers:
+            lines.append("**called by:**")
+            for e in callers:
+                lines.append(f"- `{short(e['id'])}` ({e['confidence']})")
+        if callees:
+            lines.append("**calls:**")
+            for e in callees:
+                lines.append(f"- `{short(e['id'])}` ({e['confidence']})"
+                             + (f" - line {e['line']}" if e.get('line') else ""))
+        if not callers and not callees:
+            lines.append("_no resolved calls_")
+        lines.append("")
     return "\n".join(lines) + "\n"
 
 

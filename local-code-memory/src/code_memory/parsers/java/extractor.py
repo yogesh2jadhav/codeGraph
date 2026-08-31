@@ -21,6 +21,7 @@ from code_memory.models.code import (
     FieldDecl,
     ImportDecl,
     MethodDecl,
+    MethodRef,
     Parameter,
     ParsedFile,
     ParseStatus,
@@ -275,12 +276,77 @@ def _method(source: bytes, node, owner_fqn: str, rel: str,
 
     param_types = ",".join(p.type_text for p in params)
     fqn = f"{owner_fqn}#{name}({param_types})"
+
+    body = node.child_by_field_name("body")
+    references = _body_references(source, body) if body is not None else []
+
     return MethodDecl(
         name=name, kind=kind, owner_fqn=owner_fqn, fqn=fqn,
         location=_loc(node, rel), return_type=return_type, parameters=params,
         throws=throws, modifiers=mods, annotations=annos,
         type_parameters=_type_params(source, node),
+        references=references,
     )
+
+
+def _arg_count(arg_list_node) -> int:
+    if arg_list_node is None:
+        return 0
+    return sum(1 for c in arg_list_node.children if c.is_named)
+
+
+def _body_references(source: bytes, body) -> list[MethodRef]:
+    """Collect calls / object creations / catch types / local var types from a
+    method body. Recurses through all statements and lambdas but stops at nested
+    type declarations (their members are extracted separately with their own
+    owner)."""
+    refs: list[MethodRef] = []
+    stack = [body]
+    while stack:
+        n = stack.pop()
+        if n.type in _TYPE_DECL_NODES:
+            continue
+
+        if n.type == "method_invocation":
+            obj = n.child_by_field_name("object")
+            name = n.child_by_field_name("name")
+            args = n.child_by_field_name("arguments")
+            refs.append(MethodRef(
+                kind="call",
+                name=node_text(source, name) if name is not None else "?",
+                receiver_text=_norm(node_text(source, obj)) if obj is not None else None,
+                arg_count=_arg_count(args),
+                line=n.start_point[0] + 1,
+            ))
+        elif n.type == "object_creation_expression":
+            t = n.child_by_field_name("type")
+            args = n.child_by_field_name("arguments")
+            if t is not None:
+                refs.append(MethodRef(
+                    kind="create", type_text=_norm(node_text(source, t)),
+                    arg_count=_arg_count(args), line=n.start_point[0] + 1,
+                ))
+        elif n.type == "local_variable_declaration":
+            t = n.child_by_field_name("type")
+            type_text = _norm(node_text(source, t)) if t is not None else None
+            for d in n.children:
+                if d.type == "variable_declarator":
+                    nm = d.child_by_field_name("name")
+                    if nm is not None:
+                        refs.append(MethodRef(
+                            kind="localvar", name=node_text(source, nm),
+                            type_text=type_text, line=d.start_point[0] + 1,
+                        ))
+        elif n.type == "catch_formal_parameter":
+            ct = next((c for c in n.children if c.type == "catch_type"), None)
+            if ct is not None:
+                refs.append(MethodRef(
+                    kind="catch", type_text=_norm(node_text(source, ct)),
+                    line=n.start_point[0] + 1,
+                ))
+
+        stack.extend(n.children)
+    return refs
 
 
 def _parameters(source: bytes, params_node) -> list[Parameter]:
