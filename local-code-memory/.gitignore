@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# local state
+data/*.db
+logs/*.log
+.code-memory/
+
+# local overrides (never commit secrets / machine paths)
+config/application.local.yaml
+config/logging.local.yaml

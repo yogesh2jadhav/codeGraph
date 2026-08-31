@@ -1,0 +1,7 @@
+app:
+  user:
+    timeout: 30
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/users
+    password: changeme
