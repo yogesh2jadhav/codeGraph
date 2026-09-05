@@ -61,11 +61,14 @@ MODES = {
     "add_logging": "add_logging.md",
     "refactor": "refactor.md",
     "impact_analysis": "impact_analysis.md",
+    "explain_code": "explain_code.md",
 }
 _MODE_ALIASES = {
     "feature": "implement_feature", "implement": "implement_feature",
     "fix": "find_fix", "bug": "find_fix", "logging": "add_logging",
     "log": "add_logging", "impact": "impact_analysis", "analyze": "impact_analysis",
+    "explain": "explain_code", "walkthrough": "explain_code",
+    "explain code": "explain_code",
 }
 
 

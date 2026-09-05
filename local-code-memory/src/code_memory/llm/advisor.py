@@ -215,6 +215,17 @@ def _fmt_item(item: Any) -> str:
             loc = f" ({item['lines']})" if item.get("lines") else ""
             extra = item.get("reason") or item.get("statement") or ""
             return f"`{item['file']}`{loc}" + (f" - {extra}" if extra else "")
+        # explain_code's shapes - formatted for readability rather than the
+        # generic "k: v; k: v" fallback below.
+        if "lines" in item and "explanation" in item:
+            return f"**lines {item['lines']}**: {item['explanation']}"
+        if "name" in item and "role" in item:
+            typ = f" ({item['type']})" if item.get("type") else ""
+            return f"`{item['name']}`{typ} - {item['role']}"
+        if "target" in item and "why" in item:
+            return f"`{item['target']}` - {item['why']}"
+        if "kind" in item and "name" in item and "how" in item:
+            return f"{item['how']} `{item['name']}` ({item['kind']})"
         return "; ".join(f"{k}: {v}" for k, v in item.items())
     if isinstance(item, list):
         return " -> ".join(str(x) for x in item)
