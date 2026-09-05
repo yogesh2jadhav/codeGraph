@@ -184,7 +184,7 @@ def _render_advice(a: Advice) -> str:
     for key, value in p.items():
         if key in ("summary", "confidence", "risk_level", "root_cause"):
             continue
-        title = key.replace("_", " ").title()
+        title = key.replace("_", " ").capitalize()
         if isinstance(value, list) and value:
             lines += [f"## {title}", ""]
             for item in value:

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from code_memory import __version__
 from code_memory.config import Config, load_config
+from code_memory.graph.resolve import resolve_symbol as _resolve_symbol
 from code_memory.health import run_health_checks
 from code_memory.logging_setup import configure_logging, get_logger
 
@@ -122,20 +123,6 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print("problem:", p)
     print("validate:", "ok" if not problems else f"{len(problems)} problem(s)")
     return 0 if not problems else 1
-
-
-def _resolve_symbol(repo, term: str) -> str | None:
-    """Best-effort: turn a user string into a graph node id."""
-    if repo.get_node(term):
-        return term
-    for prefix in ("method:", "type:", "field:", "endpoint:", "table:"):
-        if repo.get_node(prefix + term):
-            return prefix + term
-    matches = repo.find_nodes(name_contains=term)
-    exact = [n for n in matches if n.get("fqn") == term or n["name"] == term]
-    pool = exact or matches
-    pool.sort(key=lambda n: len(n["id"]))
-    return pool[0]["id"] if pool else None
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -249,6 +236,24 @@ def cmd_context(args: argparse.Namespace) -> int:
             print(f"  patch -> {advice.patch['path']}  "
                   f"(git apply --check: {advice.patch['apply_check']})")
             print("  NOT applied - review it, then `git apply` yourself.")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print("error: the web UI needs the 'api' extra: "
+              "pip install -e \"local-code-memory[api]\"", file=sys.stderr)
+        return 1
+
+    from code_memory.api import create_app
+
+    cfg = _load(args)
+    host = args.host or cfg.get("api.host", "127.0.0.1")
+    port = args.port or int(cfg.get("api.port", 8420))
+    print(f"Local Code Memory UI: http://{host}:{port}  (project: {cfg.project_root})")
+    uvicorn.run(create_app(cfg), host=host, port=port, log_level="warning")
     return 0
 
 
@@ -429,6 +434,12 @@ def build_parser() -> argparse.ArgumentParser:
     scl = sub.add_parser("clean", help="remove the .code-memory directory")
     scl.add_argument("--yes", action="store_true", help="actually delete")
     scl.set_defaults(func=cmd_clean)
+
+    ssv = sub.add_parser("serve", help="start the local web UI (needs the "
+                                       "'api' extra)")
+    ssv.add_argument("--host", default=None, help="default: 127.0.0.1")
+    ssv.add_argument("--port", type=int, default=None, help="default: 8420")
+    ssv.set_defaults(func=cmd_serve)
 
     for name in _PENDING:
         sub.add_parser(name, help=f"[pending: {_PENDING[name]}]"

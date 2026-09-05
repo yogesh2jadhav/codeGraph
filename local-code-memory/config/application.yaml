@@ -12,6 +12,11 @@ project:
   # Where generated Code Memory artifacts are written (inside the scanned repo).
   output_dir: ".code-memory"
 
+# `code-memory serve` - local web UI. Binds to localhost only.
+api:
+  host: 127.0.0.1
+  port: 8420
+
 storage:
   # SQLite metadata DB - independent from Neo4j and Qdrant.
   metadata: "./data/metadata.db"
