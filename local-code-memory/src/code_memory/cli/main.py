@@ -468,7 +468,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="also send the task pack to the local LLM (writes advice.md)")
     sc.add_argument("--mode", default="implement_feature",
                     help="advisor mode: implement_feature | find_fix | debug | "
-                         "add_logging | refactor | impact_analysis")
+                         "add_logging | refactor | impact_analysis | explain_code")
     sc.add_argument("--patch", action="store_true",
                     help="also ask the LLM for a unified diff (patch.diff; never applied)")
     sc.set_defaults(func=cmd_context)
