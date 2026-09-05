@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local Code Memory</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Local Code Memory</span>
+      </div>
+      <div class="project-bar">
+        <input id="project-root" type="text" placeholder="/path/to/java-project" spellcheck="false">
+        <button id="btn-set-project" class="btn">Open</button>
+        <select id="scan-mode">
+          <option value="full">full scan</option>
+          <option value="incremental" selected>incremental</option>
+          <option value="rebuild">rebuild</option>
+        </select>
+        <button id="btn-scan" class="btn btn-primary">Scan</button>
+        <span id="scan-status" class="status"></span>
+      </div>
+    </header>
+
+    <div class="body">
+      <nav class="sidenav">
+        <button class="nav-item active" data-tab="overview">Overview</button>
+        <button class="nav-item" data-tab="docs">Context docs</button>
+        <button class="nav-item" data-tab="search">Search</button>
+        <button class="nav-item" data-tab="graph">Graph explorer</button>
+        <button class="nav-item" data-tab="endpoints">Endpoints</button>
+        <button class="nav-item" data-tab="sql">SQL &amp; tables</button>
+        <button class="nav-item" data-tab="spark">Spark jobs</button>
+        <button class="nav-item" data-tab="ask">Ask / Tasks</button>
+      </nav>
+
+      <main class="content">
+
+        <section id="tab-overview" class="tab">
+          <h1>Project overview</h1>
+          <div id="overview-empty" class="empty">No scan yet. Enter a project path above and click <b>Scan</b>.</div>
+          <div id="overview-body" class="hidden">
+            <div class="stat-grid" id="overview-stats"></div>
+            <div class="card">
+              <h3>Build</h3>
+              <div id="overview-build" class="kv"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-docs" class="tab hidden">
+          <h1>Context docs</h1>
+          <div class="docs-layout">
+            <ul id="docs-list" class="docs-list"></ul>
+            <pre id="docs-content" class="docs-content">Select a file.</pre>
+          </div>
+        </section>
+
+        <section id="tab-search" class="tab hidden">
+          <h1>Search</h1>
+          <div class="search-bar">
+            <input id="search-query" type="text" placeholder="e.g. where is payment retry handled">
+            <button id="btn-search" class="btn btn-primary">Search</button>
+          </div>
+          <div id="search-results" class="result-list"></div>
+        </section>
+
+        <section id="tab-graph" class="tab hidden">
+          <h1>Graph explorer</h1>
+          <div class="search-bar">
+            <input id="graph-symbol" type="text" placeholder="FQN, node id, or a name substring">
+            <button id="btn-graph" class="btn btn-primary">Look up</button>
+          </div>
+          <div id="graph-body"></div>
+        </section>
+
+        <section id="tab-endpoints" class="tab hidden">
+          <h1>HTTP endpoints</h1>
+          <div id="endpoints-body" class="empty">No endpoints yet - run a scan.</div>
+        </section>
+
+        <section id="tab-sql" class="tab hidden">
+          <h1>SQL &amp; tables</h1>
+          <div id="sql-body" class="empty">No SQL detected yet - run a scan.</div>
+        </section>
+
+        <section id="tab-spark" class="tab hidden">
+          <h1>Spark jobs</h1>
+          <div id="spark-body" class="empty">No Spark jobs detected yet - run a scan.</div>
+        </section>
+
+        <section id="tab-ask" class="tab hidden">
+          <h1>Ask / Tasks</h1>
+          <div class="ask-form card">
+            <textarea id="ask-task" rows="3" placeholder="Describe the change, e.g. 'add retry when the payment service fails'"></textarea>
+            <div class="ask-controls">
+              <select id="ask-mode">
+                <option value="implement_feature">implement feature</option>
+                <option value="find_fix">find fix</option>
+                <option value="debug">debug</option>
+                <option value="add_logging">add logging</option>
+                <option value="refactor">refactor</option>
+                <option value="impact_analysis">impact analysis</option>
+              </select>
+              <label class="check"><input type="checkbox" id="ask-ask" checked> ask the LLM</label>
+              <label class="check"><input type="checkbox" id="ask-patch"> generate patch</label>
+              <button id="btn-ask" class="btn btn-primary">Run</button>
+              <span id="ask-status" class="status"></span>
+            </div>
+          </div>
+          <div class="tasks-layout">
+            <ul id="tasks-list" class="docs-list"></ul>
+            <div id="task-detail" class="task-detail">Select or run a task.</div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

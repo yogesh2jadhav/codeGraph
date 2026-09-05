@@ -24,16 +24,21 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4",
+    "httpx>=0.27",       # needed by fastapi.testclient.TestClient
 ]
 neo4j = ["neo4j>=5"]
 qdrant = ["qdrant-client>=1.7"]
 embeddings = ["sentence-transformers>=2.2"]
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.scripts]
 code-memory = "code_memory.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"code_memory.api" = ["static/*", "static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

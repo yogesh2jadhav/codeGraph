@@ -2,7 +2,7 @@ import json
 
 from code_memory.config import load_config
 from code_memory.llm import EchoProvider, get_llm_provider
-from code_memory.llm.advisor import _extract_json
+from code_memory.llm.advisor import Advice, _extract_json, _render_advice
 from code_memory.llm.prompts import render_task_prompt, system_prompt
 
 
@@ -43,3 +43,24 @@ def test_get_llm_provider_explicit_echo():
     cfg = load_config()
     cfg.data["llm"]["provider"] = "echo"
     assert isinstance(get_llm_provider(cfg), EchoProvider)
+
+
+def test_render_advice_section_titles_are_sentence_case():
+    # generic-key rendering must not Title-Case every word (found via manual
+    # UI testing: "files_to_change" rendered as "Files To Change")
+    a = Advice("t", "echo", "echo", "{}", {
+        "summary": "s", "confidence": "HIGH",
+        "files_to_change": [{"file": "X.java", "lines": "1-2", "reason": "r"}],
+        "risks": ["a risk"],
+    }, {})
+    md = _render_advice(a)
+    assert "## Files to change" in md
+    assert "## Risks" in md
+    assert "Files To Change" not in md
+
+
+def test_render_advice_handles_missing_json():
+    a = Advice("t", "echo", "echo", "raw text only", None, {})
+    md = _render_advice(a)
+    assert "did not return parseable JSON" in md
+    assert "raw text only" in md

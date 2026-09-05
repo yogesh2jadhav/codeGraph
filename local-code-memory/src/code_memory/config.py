@@ -25,6 +25,7 @@ ENV_PREFIX = "CODE_MEMORY__"
 DEFAULTS: dict[str, Any] = {
     "project": {"root": ".", "output_dir": ".code-memory"},
     "storage": {"metadata": "./data/metadata.db"},
+    "api": {"host": "127.0.0.1", "port": 8420},
     "graph": {
         # "memory" (default, no server) or "neo4j"
         "provider": "memory",

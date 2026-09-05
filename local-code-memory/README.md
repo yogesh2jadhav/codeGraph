@@ -27,8 +27,9 @@ No cloud APIs. No source-code upload. See [PLAN.md](PLAN.md) for the full design
 | 14 | Git integration — `code-memory diff <ref>` maps a diff onto the graph → `change_impact.md` | ✅ done |
 | 15 | Incremental memory — `scan --incremental` re-embeds only changed chunks, prunes stale ones; `code-memory clean` | ✅ done |
 | 16 | Patch generation — `context "<task>" --ask --patch` → `patch.diff` (+ `git apply --check`), **never auto-applied** | ✅ done |
+| 17 | Local web UI (§36, §52.F) — `code-memory serve`: scan/overview, context docs, search, graph explorer, endpoints/SQL/Spark dashboards, ask/tasks | ✅ done |
 
-**All 17 phases (0–16) implemented.**
+**All 17 phases (0–16) plus a local web UI implemented.**
 
 ## Quick start
 
@@ -117,6 +118,26 @@ Graph and vector default to in-memory (no servers). Set `graph.provider: neo4j`
 and `docker compose up -d`) to use the real backends. Embeddings default to
 dependency-free feature-hashing; set `embedding.provider: ollama` for
 `nomic-embed-text`.
+
+## Web UI
+
+```bash
+../.venv/bin/pip install -e "local-code-memory[api]"
+../.venv/bin/python -m code_memory --project /path/to/java-project serve
+```
+
+Opens on `http://127.0.0.1:8420` (localhost only). It's the same functionality
+as the CLI, in a browser: set the project path and scan (with live status),
+browse the generated `context/00`–`14` docs, run hybrid search, look up any
+symbol's graph neighbours, dashboards for HTTP endpoints / SQL & tables /
+Spark jobs, and an "Ask / Tasks" tab that builds a task pack and — optionally —
+sends it to the local LLM (with a mode picker and an option to also generate a
+patch) and renders `advice.md`. Scans and LLM calls run as background jobs the
+page polls, so the UI never blocks.
+
+`--host` / `--port` or `api.host` / `api.port` in config override the bind
+address; needs the `api` extra (`fastapi` + `uvicorn`) — nothing else in the
+project depends on it.
 
 ## Configuration
 
