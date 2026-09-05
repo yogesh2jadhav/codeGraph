@@ -32,6 +32,7 @@
         <button class="nav-item" data-tab="docs">Context docs</button>
         <button class="nav-item" data-tab="search">Search</button>
         <button class="nav-item" data-tab="graph">Graph explorer</button>
+        <button class="nav-item" data-tab="flow">Execution flow</button>
         <button class="nav-item" data-tab="endpoints">Endpoints</button>
         <button class="nav-item" data-tab="sql">SQL &amp; tables</button>
         <button class="nav-item" data-tab="spark">Spark jobs</button>
@@ -76,6 +77,22 @@
             <button id="btn-graph" class="btn btn-primary">Look up</button>
           </div>
           <div id="graph-body"></div>
+        </section>
+
+        <section id="tab-flow" class="tab hidden">
+          <h1>Execution flow</h1>
+          <p class="hint">Works for any method - not just HTTP endpoints or Spark
+            jobs. Good for plain batch/ETL entrypoints: a <code>main()</code> or a
+            driver method that starts a full run.</p>
+          <div class="search-bar">
+            <input id="flow-symbol" type="text" placeholder="FQN, node id, or a name substring - e.g. MyEtlJob.run">
+            <button id="btn-flow" class="btn btn-primary">Trace</button>
+          </div>
+          <div id="flow-entrypoints" class="card">
+            <h3>Detected entrypoints</h3>
+            <div id="flow-entrypoints-body" class="empty">No scan yet.</div>
+          </div>
+          <div id="flow-body"></div>
         </section>
 
         <section id="tab-endpoints" class="tab hidden">

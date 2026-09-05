@@ -199,6 +199,20 @@ def _md_files(repo, focus_ids, b) -> str:
 
 def _md_callgraph(repo, seed_methods) -> str:
     lines = ["# Call graph (task scope)", ""]
+
+    # Full ordered chain for the top retrieval hit - this is what makes
+    # "explain what <method> does end to end" work for a plain ETL/batch
+    # entrypoint, not just Spring endpoints (those already had this via
+    # 08_data_flow.md; a bare method didn't).
+    if seed_methods:
+        top = seed_methods[0]
+        flow = repo.find_call_flow(top, max_depth=6)
+        if flow:
+            lines += [f"## Full call chain from `{_short(top)}`", ""]
+            lines += [f"{'  ' * s['depth']}- `{_short(s['id'])}` "
+                     f"({s.get('confidence')})" for s in flow[:60]]
+            lines.append("")
+
     for mid in seed_methods[:15]:
         lines.append(f"## `{_short(mid)}`")
         callers = repo.find_callers(mid)

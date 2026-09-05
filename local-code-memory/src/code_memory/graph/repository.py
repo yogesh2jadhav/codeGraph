@@ -23,6 +23,15 @@ from code_memory.models.graph import CodeGraph
 
 log = get_logger("graph.repository")
 
+# Method names that strongly suggest "this is a standalone entrypoint" (a
+# main(), a Runnable/Callable-style entry, a batch/ETL job driver) - used by
+# find_entrypoints() implementations to rank results, not to filter them (a
+# caller-less method with real callees is reported either way).
+ENTRY_NAME_HINTS = {
+    "main", "run", "execute", "process", "start", "call", "launch",
+    "doWork", "doExecute", "runJob", "runPipeline",
+}
+
 
 class GraphRepository(abc.ABC):
     # -- lifecycle ----------------------------------------------------
@@ -63,6 +72,19 @@ class GraphRepository(abc.ABC):
 
     @abc.abstractmethod
     def find_endpoint_flow(self, endpoint_id: str) -> dict[str, Any]: ...
+
+    @abc.abstractmethod
+    def find_call_flow(self, method_id: str, max_depth: int = 8) -> list[dict[str, Any]]:
+        """Ordered, breadth-first CALLS chain starting at ``method_id`` - the
+        generic form of ``find_endpoint_flow`` for any method, not just a
+        Spring handler. Each item is {id, depth, confidence}."""
+
+    @abc.abstractmethod
+    def find_entrypoints(self) -> list[dict[str, Any]]:
+        """Methods that look like a standalone execution entrypoint: nothing
+        in the scan calls them, they call at least one other in-scan method,
+        and they are not already reported as a Spring endpoint or Spark job
+        (those get their own dedicated flow views)."""
 
     @abc.abstractmethod
     def find_database_usage(self, table: str) -> dict[str, Any]: ...

@@ -251,8 +251,8 @@ def _f05(c: _Ctx) -> str:
 # -- 08 data flow -----------------------------------------
 def _f08(c: _Ctx) -> str:
     lines = _hdr("08 - Data flow", c,
-                 "Endpoint request flows + Spark pipelines, from CALLS + "
-                 "table edges.")
+                 "Endpoint request flows, Spark pipelines, and standalone "
+                 "(batch/ETL/CLI) entrypoints, from CALLS + table edges.")
     endpoints = c.repo.find_nodes(kind="Endpoint")
     if endpoints:
         lines += ["## HTTP request flows", ""]
@@ -270,8 +270,28 @@ def _f08(c: _Ctx) -> str:
                          f"--[{', '.join(job.transformations[:6])}]--> "
                          f"{', '.join(job.writes_tables) or '?'}")
         lines.append("")
+
+    # Neither a Spring endpoint nor a Spark job (e.g. a plain ETL job with a
+    # main()/run() driver) still has its call chain in the graph - just no
+    # dedicated view until now. Surface up to 5 candidates, ranked by name
+    # (main/run/execute/...) then by fan-out.
+    entrypoints = c.repo.find_entrypoints()
+    if entrypoints:
+        lines += ["## Standalone entrypoints (batch / ETL / CLI)", "",
+                  "_Detected as: nothing in this scan calls them, and they call "
+                  "something else. Not annotation-based - works for plain Java too._",
+                  ""]
+        for ep in entrypoints[:5]:
+            flow = c.repo.find_call_flow(ep["id"], max_depth=6)
+            chain = " -> ".join(_short(s["id"]) for s in flow[:10])
+            lines.append(f"- `{ep['fqn']}`" + (f" -> {chain}" if chain else ""))
+        if len(entrypoints) > 5:
+            lines.append(f"- _(+{len(entrypoints) - 5} more - see `graph` / "
+                         f"`impact` for any of them)_")
+        lines.append("")
+
     if len(lines) <= 6:
-        lines.append("_No endpoint or Spark data flows detected._")
+        lines.append("_No endpoint, Spark, or standalone entrypoint flows detected._")
     return "\n".join(lines) + "\n"
 
 

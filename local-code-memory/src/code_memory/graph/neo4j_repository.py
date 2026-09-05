@@ -149,6 +149,36 @@ class Neo4jGraphRepository(GraphRepository):
         return {"endpoint": endpoint_id, "handler": handler,
                 "flow": [list(p) for p in flow]}
 
+    def find_call_flow(self, method_id, max_depth=8):
+        rows = self._run(
+            f"MATCH p = (:CodeNode {{id: $id}})-[:CALLS*1..{int(max_depth)}]->"
+            "(x:CodeNode) "
+            "WITH x, min(length(p)) AS depth "
+            "RETURN x.id AS id, depth ORDER BY depth", id=method_id)
+        return [{"id": r["id"], "depth": r["depth"], "confidence": None}
+                for r in rows]
+
+    def find_entrypoints(self):
+        rows = self._run(
+            "MATCH (m:CodeNode) WHERE m.kind IN ['Method', 'Constructor'] "
+            "AND NOT coalesce(m.placeholder, false) "
+            "AND NOT coalesce(m.spark_job, false) "
+            "AND NOT ( ()-[:CALLS]->(m) ) "
+            "AND NOT ( (:CodeNode)-[:MAPPED_TO]->(m) ) "
+            "AND EXISTS( (m)-[:CALLS]->(:CodeNode) ) "
+            "RETURN m.id AS id, m.fqn AS fqn, m.name AS name, m.owner AS owner, "
+            "size([(m)-[:CALLS]->(:CodeNode) | 1]) AS call_count"
+        )
+        out = [
+            {"id": r["id"], "fqn": r["fqn"] or r["id"],
+             "name_hint": r["name"] in _ENTRY_NAME_HINTS,
+             "call_count": r["call_count"]}
+            for r in rows
+            if not ("Test" in (r["owner"] or "") or "test" in (r["owner"] or "").lower())
+        ]
+        out.sort(key=lambda e: (not e["name_hint"], -e["call_count"]))
+        return out
+
     def find_database_usage(self, table):
         table_id = table if table.startswith("table:") else f"table:{table.lower()}"
         read = self._run(

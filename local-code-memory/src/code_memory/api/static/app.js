@@ -28,6 +28,7 @@
     $$(".nav-item").forEach((el) => el.classList.toggle("active", el.dataset.tab === name));
     if (name === "overview") loadOverview();
     if (name === "docs") loadDocs();
+    if (name === "flow") loadEntrypoints();
     if (name === "endpoints") loadEndpoints();
     if (name === "sql") loadSql();
     if (name === "spark") loadSpark();
@@ -196,6 +197,71 @@
         </div>
         <div class="card"><h3>Neighbours (${data.neighbors.length})</h3>
           <ul class="edge-list">${edges || "<li>none</li>"}</ul>
+        </div>`;
+    } catch (e) {
+      box.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  // -- execution flow (any method - endpoints, Spark jobs, plain ETL) --
+  async function loadEntrypoints() {
+    const box = $("#flow-entrypoints-body");
+    try {
+      const eps = await get("/entrypoints");
+      if (!eps.length) {
+        box.className = "empty";
+        box.textContent = "None found (nothing with zero in-repo callers and at least one call out).";
+        return;
+      }
+      box.className = "";
+      box.innerHTML = `<ul class="edge-list">${eps.map((e) => `
+        <li data-symbol="${escapeAttr(e.fqn)}" style="cursor:pointer">
+          <code>${escapeHtml(e.fqn)}</code>
+          <span class="tag">${e.call_count} call(s)</span>
+        </li>`).join("")}</ul>`;
+      $$("#flow-entrypoints-body li").forEach((li) => li.addEventListener("click", () => {
+        $("#flow-symbol").value = li.dataset.symbol;
+        lookupFlow();
+      }));
+    } catch (e) {
+      box.className = "empty";
+      box.textContent = e.message;
+    }
+  }
+
+  $("#btn-flow").addEventListener("click", lookupFlow);
+  $("#flow-symbol").addEventListener("keydown", (e) => { if (e.key === "Enter") lookupFlow(); });
+  async function lookupFlow() {
+    const symbol = $("#flow-symbol").value.trim();
+    if (!symbol) return;
+    const box = $("#flow-body");
+    box.innerHTML = "<div class=\"empty\">Tracing…</div>";
+    try {
+      const data = await get("/flow/" + encodeURIComponent(symbol));
+      if (!data.flow.length) {
+        box.innerHTML = `<div class="card"><h3>Entrypoint</h3>
+          <div class="kv"><div class="k">method</div><div class="v">${escapeHtml(shortId(data.start))}</div></div>
+          <div class="empty">No resolved calls from this method (it may only call external/library code).</div></div>`;
+        return;
+      }
+      const steps = data.flow.map((s) => {
+        const loc = s.node && s.node.location
+          ? `${s.node.location.relative_path}:${s.node.location.line_start}` : "";
+        return `<li style="margin-left:${s.depth * 18}px">
+          <code>${escapeHtml(shortId(s.id))}</code>
+          <span class="conf conf-${s.confidence || "UNKNOWN"}">${s.confidence || "?"}</span>
+          ${loc ? `<span class="meta">${escapeHtml(loc)}</span>` : ""}
+        </li>`;
+      }).join("");
+      box.innerHTML = `
+        <div class="card"><h3>Entrypoint</h3>
+          <div class="kv">
+            <div class="k">method</div><div class="v">${escapeHtml(shortId(data.start))}</div>
+            <div class="k">steps</div><div class="v">${data.flow.length}</div>
+          </div>
+        </div>
+        <div class="card"><h3>Call chain (breadth-first, indented by depth)</h3>
+          <ul class="edge-list">${steps}</ul>
         </div>`;
     } catch (e) {
       box.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;

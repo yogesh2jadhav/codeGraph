@@ -194,6 +194,45 @@ def cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_flow(args: argparse.Namespace) -> int:
+    from code_memory.graph.repository import get_graph_repository
+
+    cfg = _load(args)
+    repo = get_graph_repository(cfg)
+
+    if not args.symbol:
+        eps = repo.find_entrypoints()
+        if not eps:
+            print("no standalone entrypoints found (nothing with zero "
+                  "in-repo callers and at least one call out)")
+            return 0
+        print(f"{len(eps)} candidate entrypoint(s) "
+              "(ranked: name match, then fan-out):")
+        for ep in eps:
+            print(f"  {ep['fqn']}  (calls {ep['call_count']} method(s))")
+        print("\nrun `code-memory flow <symbol>` on one of these for its full "
+              "call chain.")
+        return 0
+
+    node_id = _resolve_symbol(repo, args.symbol)
+    if node_id is None:
+        print(f"symbol not found: {args.symbol}")
+        return 1
+    chain = repo.find_call_flow(node_id, max_depth=args.depth)
+    print(f"call flow from {node_id}  (depth <= {args.depth})")
+    if not chain:
+        print("  no resolved calls from this method")
+        return 0
+    for step in chain:
+        node = repo.get_node(step["id"])
+        loc = (node or {}).get("location") or {}
+        where = f"{loc.get('relative_path')}:{loc.get('line_start')}" \
+            if loc.get("relative_path") else ""
+        print(f"  {'  ' * step['depth']}-> {step['id']}  "
+              f"({step.get('confidence')})  {where}")
+    return 0
+
+
 def cmd_context(args: argparse.Namespace) -> int:
     cfg = _load(args)
     if not args.task:
@@ -411,6 +450,14 @@ def build_parser() -> argparse.ArgumentParser:
     sg = sub.add_parser("graph", help="graph stats, or a node + its neighbours")
     sg.add_argument("symbol", nargs="?", help="FQN, node id, or a name substring")
     sg.set_defaults(func=cmd_graph)
+
+    sf = sub.add_parser("flow", help="full ordered call chain from a method "
+                                     "(any method - not just endpoints/Spark "
+                                     "jobs); omit the symbol to list candidate "
+                                     "entrypoints")
+    sf.add_argument("symbol", nargs="?", help="FQN, node id, or a name substring")
+    sf.add_argument("--depth", type=int, default=8)
+    sf.set_defaults(func=cmd_flow)
 
     sc = sub.add_parser("context",
                         help="regenerate the full context pack, or build a "
