@@ -233,6 +233,34 @@ def cmd_flow(args: argparse.Namespace) -> int:
     return 0
 
 
+_ADVICE_SKIP_KEYS = ("summary", "confidence", "risk_level", "root_cause")
+
+
+def _print_advice_detail(p: dict, max_items: int = 12) -> None:
+    """Print every remaining list/dict field from parsed advice JSON to the
+    console - not just files_to_change. Without this, modes like explain_code
+    (whose payload is "walkthrough", not "files_to_change") print almost
+    nothing to the terminal even though advice.md has the full answer."""
+    from code_memory.llm.advisor import _fmt_item
+
+    for key, value in p.items():
+        if key in _ADVICE_SKIP_KEYS or not value:
+            continue
+        title = key.replace("_", " ")
+        if isinstance(value, list):
+            print(f"  {title}:")
+            for item in value[:max_items]:
+                print(f"    - {_fmt_item(item)}")
+            if len(value) > max_items:
+                print(f"    ... (+{len(value) - max_items} more - see advice.md)")
+        elif isinstance(value, dict):
+            print(f"  {title}:")
+            for k, v in list(value.items())[:max_items]:
+                print(f"    - {k}: {_fmt_item(v)}")
+        else:
+            print(f"  {title}: {value}")
+
+
 def cmd_context(args: argparse.Namespace) -> int:
     cfg = _load(args)
     if not args.task:
@@ -268,9 +296,10 @@ def cmd_context(args: argparse.Namespace) -> int:
         if p:
             print(f"  {p.get('summary') or p.get('root_cause') or ''}")
             print(f"  confidence/risk: {p.get('confidence') or p.get('risk_level')}")
-            for fc in (p.get("files_to_change") or [])[:10]:
-                if isinstance(fc, dict):
-                    print(f"    change {fc.get('file')} ({fc.get('lines', '?')})")
+            _print_advice_detail(p)
+        elif not p and advice.raw:
+            print("  (model did not return parseable JSON - see advice.md "
+                 "for the raw response)")
         if advice.patch:
             print(f"  patch -> {advice.patch['path']}  "
                   f"(git apply --check: {advice.patch['apply_check']})")
