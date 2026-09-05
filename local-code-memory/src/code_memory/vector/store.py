@@ -108,7 +108,7 @@ class InMemoryVectorStore(VectorStore):
         }), encoding="utf-8")
 
     def _load(self) -> None:
-        data = json.loads(self.path.read_text())
+        data = json.loads(self.path.read_text(encoding="utf-8"))
         self.embedding_name = data.get("embedding", "")
         for item in data.get("items", []):
             self._chunks.append(Chunk.from_dict(item["chunk"]))

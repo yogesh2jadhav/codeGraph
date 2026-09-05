@@ -294,7 +294,7 @@ def _iter_config(config):
     try:
         import json
         inv = json.loads((config.output_dir / "project_inventory.json")
-                         .read_text())
+                         .read_text(encoding="utf-8"))
     except OSError:
         return []
     out = []

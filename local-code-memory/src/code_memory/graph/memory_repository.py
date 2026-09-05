@@ -44,8 +44,10 @@ class InMemoryGraphRepository(GraphRepository):
         self._index()
 
     def _load_from_json(self, nodes_path: Path, edges_path: Path) -> None:
-        self._nodes = {n["id"]: n for n in json.loads(nodes_path.read_text())}
-        self._edges = json.loads(edges_path.read_text()) if edges_path.is_file() else []
+        self._nodes = {n["id"]: n for n in
+                       json.loads(nodes_path.read_text(encoding="utf-8"))}
+        self._edges = (json.loads(edges_path.read_text(encoding="utf-8"))
+                       if edges_path.is_file() else [])
         self._index()
 
     # -- lifecycle -----------------------------------------------
@@ -54,8 +56,10 @@ class InMemoryGraphRepository(GraphRepository):
         if self._nodes_path and self._edges_path:
             self._nodes_path.parent.mkdir(parents=True, exist_ok=True)
             self._nodes_path.write_text(
-                json.dumps(list(self._nodes.values()), indent=2) + "\n")
-            self._edges_path.write_text(json.dumps(self._edges, indent=2) + "\n")
+                json.dumps(list(self._nodes.values()), indent=2) + "\n",
+                encoding="utf-8")
+            self._edges_path.write_text(
+                json.dumps(self._edges, indent=2) + "\n", encoding="utf-8")
 
     def clear(self) -> None:
         self._nodes, self._edges = {}, []
