@@ -102,8 +102,8 @@ def create_app(config: Config | None = None) -> FastAPI:
         manifest_path = c.output_dir / "manifest.json"
         if not inv_path.is_file():
             return {"scanned": False}
-        inv = json.loads(inv_path.read_text())
-        manifest = (json.loads(manifest_path.read_text())
+        inv = json.loads(inv_path.read_text(encoding="utf-8"))
+        manifest = (json.loads(manifest_path.read_text(encoding="utf-8"))
                    if manifest_path.is_file() else None)
         return {"scanned": True, "inventory": inv, "manifest": manifest}
 
@@ -312,7 +312,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             if p.is_file():
                 files[name] = p.read_text(encoding="utf-8")
         advice_json = d / "advice.json"
-        advice = (json.loads(advice_json.read_text())
+        advice = (json.loads(advice_json.read_text(encoding="utf-8"))
                  if advice_json.is_file() else None)
         return {"id": task_id, "files": files, "advice": advice}
 
