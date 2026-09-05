@@ -192,6 +192,24 @@ def create_app(config: Config | None = None) -> FastAPI:
         return {"node": r.get_node(node_id),
                 "neighbors": r.neighbors(node_id, direction="both")}
 
+    @app.get("/api/entrypoints")
+    def entrypoints():
+        """Candidate standalone entrypoints (batch/ETL/CLI main()/run()
+        methods) - anything with no in-repo caller that isn't already a
+        Spring endpoint or Spark job."""
+        return repo().find_entrypoints()
+
+    @app.get("/api/flow/{symbol:path}")
+    def call_flow(symbol: str, depth: int = 8):
+        r = repo()
+        node_id = resolve_symbol(r, symbol)
+        if node_id is None:
+            raise HTTPException(404, f"symbol not found: {symbol}")
+        chain = r.find_call_flow(node_id, max_depth=depth)
+        for step in chain:
+            step["node"] = r.get_node(step["id"])
+        return {"start": node_id, "flow": chain}
+
     # -- dashboards: endpoints / sql / spark -------------------------
     @app.get("/api/endpoints")
     def endpoints():

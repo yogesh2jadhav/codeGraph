@@ -79,12 +79,25 @@ Add `--inventory-only` to `scan` to skip the Phase 2 graph build.
 ../.venv/bin/python -m code_memory --project /path search "add retry to payment calls"
 ../.venv/bin/python -m code_memory --project /path impact PaymentService.processPayment
 ../.venv/bin/python -m code_memory --project /path graph processPayment
+../.venv/bin/python -m code_memory --project /path flow                 # list candidate entrypoints
+../.venv/bin/python -m code_memory --project /path flow MyEtlJob.main   # full call chain
 ```
 
 `search` runs hybrid retrieval (lexical + vector + symbol + call-graph expansion,
 reciprocal-rank fused, then reranked). `impact` reports direct/transitive callers,
 callees, tests and related SQL/types. `graph` (no arg) prints backend stats;
 with a symbol it prints that node and its neighbours.
+
+`flow` traces the **full ordered call chain** from any method — not just Spring
+endpoints or Spark jobs. With no argument it lists candidate entrypoints:
+methods nothing in the scan calls, that call something else themselves (a
+`main()`, a batch/ETL job's `run()`, a scheduled task driver, …). This is what
+answers "explain what `MyEtlJob.main` does end to end" for plain Java code with
+no framework annotations at all — the same graph the endpoint/Spark flows use,
+just without requiring a `@RequestMapping` or a Spark import to trigger it.
+`08_data_flow.md` includes these under "Standalone entrypoints", and
+`context "explain what MyEtlJob.main does" --ask` includes the full chain in
+`call_graph.md` so the LLM sees the whole flow, not just one hop.
 
 ```bash
 # regenerate the full context/ pack
@@ -129,8 +142,10 @@ dependency-free feature-hashing; set `embedding.provider: ollama` for
 Opens on `http://127.0.0.1:8420` (localhost only). It's the same functionality
 as the CLI, in a browser: set the project path and scan (with live status),
 browse the generated `context/00`–`14` docs, run hybrid search, look up any
-symbol's graph neighbours, dashboards for HTTP endpoints / SQL & tables /
-Spark jobs, and an "Ask / Tasks" tab that builds a task pack and — optionally —
+symbol's graph neighbours, trace the full execution flow from any entrypoint
+(REST or not — a plain batch/ETL `main()`/`run()` works the same as an HTTP
+handler), dashboards for HTTP endpoints / SQL & tables / Spark jobs, and an
+"Ask / Tasks" tab that builds a task pack and — optionally —
 sends it to the local LLM (with a mode picker and an option to also generate a
 patch) and renders `advice.md`. Scans and LLM calls run as background jobs the
 page polls, so the UI never blocks.

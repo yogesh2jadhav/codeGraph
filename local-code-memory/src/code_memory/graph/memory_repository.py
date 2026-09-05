@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from code_memory.graph.repository import GraphRepository
+from code_memory.graph.repository import ENTRY_NAME_HINTS, GraphRepository
 from code_memory.models.graph import CodeGraph
 
 
@@ -155,8 +155,39 @@ class InMemoryGraphRepository(GraphRepository):
     def find_endpoint_flow(self, endpoint_id):
         handler = next((n["id"] for n in self.neighbors(
             endpoint_id, edge_types=("MAPPED_TO",), direction="out")), None)
-        chain = self._ordered_calls(handler) if handler else []
+        chain = self.find_call_flow(handler) if handler else []
         return {"endpoint": endpoint_id, "handler": handler, "flow": chain}
+
+    def find_call_flow(self, method_id, max_depth=8):
+        return self._ordered_calls(method_id, max_depth=max_depth)
+
+    def find_entrypoints(self):
+        # node dicts here are the flattened JSON form (kind/id/name at the top
+        # level, everything else from Node.properties flattened alongside) -
+        # see CodeGraph.nodes_json()/Node.to_dict().
+        mapped = {e["dst"] for e in self._edges if e["type"] == "MAPPED_TO"}
+        out = []
+        for n in self._nodes.values():
+            if n["kind"] not in ("Method", "Constructor"):
+                continue
+            if n["id"] in mapped or n.get("spark_job") or n.get("placeholder"):
+                continue
+            owner = n.get("owner", "") or ""
+            if "Test" in owner or "test" in owner.lower():
+                continue
+            has_caller = any(e["type"] == "CALLS" for e in self._in.get(n["id"], []))
+            if has_caller:
+                continue
+            calls_out = [e for e in self._out.get(n["id"], [])
+                        if e["type"] == "CALLS" and e["dst"].startswith("method:")]
+            if not calls_out:
+                continue
+            out.append({"id": n["id"], "fqn": n.get("fqn", n["id"]),
+                       "name_hint": n.get("name") in ENTRY_NAME_HINTS,
+                       "call_count": len(calls_out)})
+        # methods that look intentional (main/run/...) first, then by fan-out
+        out.sort(key=lambda e: (not e["name_hint"], -e["call_count"]))
+        return out
 
     def find_database_usage(self, table):
         table_id = table if table.startswith("table:") else f"table:{table.lower()}"
